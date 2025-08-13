@@ -41,7 +41,10 @@
         <div id="file-list">
             <ul>
                 {% for file in files %}
-                    <li><a href="#">{{ file }}</a></li>
+                    <li>
+                        {{ file.filename }}
+                        <a href="{{ url_for('summarize', file_id=file.id) }}">Summarize</a>
+                    </li>
                 {% endfor %}
             </ul>
         </div>
