@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper to Podcast</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+        }
+        #left-column {
+            width: 20%;
+            border-right: 1px solid #ccc;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #main-content {
+            width: 80%;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        #pdf-viewer {
+            flex-grow: 1;
+            border: 1px solid #ccc;
+        }
+        #audio-player {
+            width: 100%;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="left-column">
+        <h2>Folders</h2>
+        <!-- Folder and file list will go here -->
+        <div id="file-list">
+            <ul>
+                {% for file in files %}
+                    <li><a href="#">{{ file }}</a></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <hr>
+        <h3>Upload New PDF</h3>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept="application/pdf">
+            <input type="submit" value="Upload">
+        </form>
+    </div>
+    <div id="main-content">
+        <h2>PDF Viewer</h2>
+        <div id="pdf-viewer">
+            <p style="text-align: center; padding-top: 50px;">Select a file to view the PDF here.</p>
+        </div>
+        <audio id="audio-player" controls>
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+</body>
+</html>
