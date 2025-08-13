@@ -1,3 +1,7 @@
 Flask
 pytest
 pytest-flask
+PyMuPDF
+Flask-SQLAlchemy
+SQLAlchemy
+google-generativeai
