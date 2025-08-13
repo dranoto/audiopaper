@@ -124,8 +124,12 @@ def summarize(file_id):
     text = pdf_file.text
 
     # Generate summary using Gemini
-    response = model.generate_content(f"Summarize the following text:\n\n{text}")
-    summary = response.text
+    try:
+        response = model.generate_content(f"Summarize the following text:\n\n{text}")
+        summary = response.text
+    except Exception as e:
+        app.logger.error(f"Error generating summary for file_id {file_id}: {e}")
+        summary = "Error: Could not generate summary at this time."
 
     return render_template('summary.html', summary=summary)
 
