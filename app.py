@@ -291,7 +291,7 @@ def generate_dialogue(file_id):
             tts_prompt += f"{part.get('speaker', 'Expert')}: {part.get('line', '')}\n"
 
         tts_model_name = f"models/{settings.tts_model}"
-        generation_config = types.GenerationConfig(
+        tts_config = types.GenerateContentConfig(
             response_modalities=["AUDIO"],
             speech_config=types.SpeechConfig(
                 multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
@@ -312,7 +312,7 @@ def generate_dialogue(file_id):
         tts_response = app.gemini_client.models.generate_content(
             model=tts_model_name,
             contents=[tts_prompt],
-            generation_config=generation_config
+            config=tts_config
         )
         
         audio_part = tts_response.candidates[0].content.parts[0]
