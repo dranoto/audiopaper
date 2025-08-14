@@ -56,5 +56,6 @@ def init_db(app):
     with app.app_context():
         db.init_app(app)
         # Check if the tables already exist before creating them
-        if not db.engine.dialect.has_table(db.engine.connect(), 'folder'):
-            db.create_all()
+        with db.engine.connect() as connection:
+            if not db.engine.dialect.has_table(connection, 'folder'):
+                db.create_all()
