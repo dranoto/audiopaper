@@ -263,7 +263,7 @@ def generate_dialogue(file_id):
         # 3. Generate multi-speaker TTS audio
         tts_response = app.gemini_client.models.generate_content(
            model="gemini-2.5-flash-preview-tts",
-           contents=tts_prompt,
+           contents=[tts_prompt],
            generation_config=types.GenerateContentConfig(
               response_modalities=["AUDIO"],
               speech_config=types.SpeechConfig(
