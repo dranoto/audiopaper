@@ -27,17 +27,21 @@ body {
 
 /* --- Sidebar Styling --- */
 .sidebar-header {
-    text-align: center;
-    padding-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    padding-bottom: 0.5rem;
     border-bottom: 1px solid #333;
 }
+
 .sidebar-header h1 {
     color: var(--sidebar-header-text);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0;
+    font-size: 1.5rem;
+    transition: opacity 0.3s ease;
 }
-.sidebar-header span {
-    font-size: 0.9rem;
-    color: var(--sidebar-text);
+
+#sidebar-toggle {
+    margin-right: 1rem;
 }
 
 #left-column .nav-link {
@@ -46,6 +50,9 @@ body {
     padding: 0.5rem 1rem;
     display: flex;
     align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 #left-column .nav-link:hover,
@@ -61,10 +68,35 @@ body {
 #left-column .file-item .nav-link {
     padding-left: 2rem;
 }
-#left-column .file-item .nav-link span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.folder-toggle {
+    transition: transform 0.3s ease;
+}
+
+.folder-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+#left-column.collapsed {
+    width: 80px;
+}
+#left-column.collapsed .sidebar-header h1,
+#left-column.collapsed .folder-name,
+#left-column.collapsed .file-filename,
+#left-column.collapsed .sidebar-footer .btn span,
+#left-column.collapsed .form-label,
+#left-column.collapsed .form-control[name="folder_name"],
+#left-column.collapsed .form-control[name="file"] {
+    opacity: 0;
+    width: 0;
+    display: none;
+}
+
+#left-column.collapsed #sidebar-toggle {
+    margin: 0 auto;
+}
+
+#left-column.collapsed .sidebar-header {
+    justify-content: center;
 }
 
 
