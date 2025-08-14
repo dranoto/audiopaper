@@ -7,7 +7,10 @@ import fitz # PyMuPDF
 import google.generativeai as genai
 
 # Configure the Gemini API
-genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+api_key = os.environ.get('GEMINI_API_KEY')
+if not api_key:
+    raise ValueError("GEMINI_API_KEY environment variable not set. Please set it in your .env file.")
+genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-pro')
 
 app = Flask(__name__)
