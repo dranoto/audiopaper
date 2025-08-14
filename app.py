@@ -130,17 +130,11 @@ def generate_dialogue(file_id):
         app.logger.info(f"Uploading {filepath} to Gemini File API for dialogue generation...")
         uploaded_file = app.gemini_client.files.upload(file=filepath)
 
-        transcript_prompt = f"""
-        Generate a podcast-style dialogue script based on the attached document.
-        The script should be a conversation between a 'Host' and an 'Expert'.
-        The Host should ask engaging questions, and the Expert should explain the key concepts from the document clearly.
-        Start each line with the speaker's name followed by a colon (e.g., "Host: ...").
-        """
         dialogue_model_name = f"models/{settings.dialogue_model}"
         app.logger.info(f"Generating transcript with model {dialogue_model_name}...")
         transcript_response = app.gemini_client.models.generate_content(
             model=dialogue_model_name,
-            contents=[uploaded_file, transcript_prompt]
+            contents=[uploaded_file, settings.dialogue_prompt]
         )
         transcript = transcript_response.text
 
@@ -210,6 +204,7 @@ def settings():
         settings.tts_host_voice = request.form.get('tts_host_voice')
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
         settings.summary_prompt = request.form.get('summary_prompt')
+        settings.dialogue_prompt = request.form.get('dialogue_prompt')
         db.session.commit()
         init_gemini_client(app)
         return redirect(url_for('settings'))

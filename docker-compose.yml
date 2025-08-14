@@ -6,6 +6,7 @@ services:
       - "8000:8000"
     volumes:
       - ./uploads:/app/uploads
+      - ./generated_audio:/app/generated_audio
       - ./static/figures:/app/static/figures
       - ./instance:/app/instance
     environment:
