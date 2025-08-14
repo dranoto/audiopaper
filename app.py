@@ -310,8 +310,11 @@ def move_file(file_id):
     if new_folder_id == 'root':
         pdf_file.folder_id = None
     else:
-        target_folder = Folder.query.get_or_404(new_folder_id)
-        pdf_file.folder_id = target_folder.id
+        try:
+            target_folder = Folder.query.get_or_404(int(new_folder_id))
+            pdf_file.folder_id = target_folder.id
+        except (ValueError, TypeError):
+            return {'error': 'Invalid folder ID provided.'}, 400
 
     db.session.commit()
     app.logger.info(f"Moved file_id {file_id} to folder_id {new_folder_id}.")
