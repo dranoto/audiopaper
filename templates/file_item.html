@@ -1,32 +1,36 @@
 <li class="nav-item" id="file-item-{{ file.id }}">
-    <div class="d-flex justify-content-between align-items-center file-item" onclick='viewPdf("{{ url_for('uploaded_file', filename=file.filename) }}", {{ file.id }}, {{ file.filename|tojson }})' style="cursor: pointer;">
+    <div class="d-flex justify-content-between align-items-center file-item" 
+         data-url="{{ url_for('uploaded_file', filename=file.filename) }}"
+         data-id="{{ file.id }}"
+         data-filename="{{ file.filename|tojson }}" 
+         style="cursor: pointer;">
         
         <a class="nav-link" href="#">
             <i class="bi bi-file-earmark-text me-2"></i>
-            <span>{{ file.filename }}</span>
+            <span class="file-filename">{{ file.filename }}</span>
         </a>
         <div class="dropdown">
             <button class="btn btn-sm btn-ghost" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                 <i class="bi bi-three-dots-vertical"></i>
             </button>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="#" onclick='renameFile({{ file.id }}, {{ file.filename|tojson }})'><i class="bi bi-pencil-fill me-2"></i>Rename</a></li>
-                <li><a class="dropdown-item" href="#" onclick="moveFile({{ file.id }})"><i class="bi bi-folder-symlink-fill me-2"></i>Move</a></li>
+                <li><a class="dropdown-item file-action-button" href="#" data-action="renameFile" data-id="{{ file.id }}" data-filename="{{ file.filename|tojson }}"><i class="bi bi-pencil-fill me-2"></i>Rename</a></li>
+                <li><a class="dropdown-item file-action-button" href="#" data-action="moveFile" data-id="{{ file.id }}"><i class="bi bi-folder-symlink-fill me-2"></i>Move</a></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><a class="dropdown-item text-danger" href="#" onclick="deleteFile({{ file.id }})"><i class="bi bi-trash-fill me-2"></i>Delete</a></li>
+                <li><a class="dropdown-item text-danger file-action-button" href="#" data-action="deleteFile" data-id="{{ file.id }}"><i class="bi bi-trash-fill me-2"></i>Delete</a></li>
             </ul>
         </div>
     </div>
     <div class="d-flex align-items-center ms-4 ps-3 mb-2 file-actions">
         {% if file.summary %}
-            <button class="btn btn-sm btn-outline-success" onclick="summarizeFile({{ file.id }})">Re-summarize</button>
+            <button class="btn btn-sm btn-outline-success file-action-button" data-action="summarizeFile" data-id="{{ file.id }}">Re-summarize</button>
         {% else %}
-            <button class="btn btn-sm btn-outline-secondary" onclick="summarizeFile({{ file.id }})">Summarize</button>
+            <button class="btn btn-sm btn-outline-secondary file-action-button" data-action="summarizeFile" data-id="{{ file.id }}">Summarize</button>
         {% endif %}
         {% if file.dialogue_transcript %}
-            <button class="btn btn-sm btn-outline-success ms-2" onclick="generateDialogue({{ file.id }})">Re-generate</button>
+            <button class="btn btn-sm btn-outline-success ms-2 file-action-button" data-action="generateDialogue" data-id="{{ file.id }}">Re-generate</button>
         {% else %}
-            <button class="btn btn-sm btn-outline-primary ms-2" onclick="generateDialogue({{ file.id }})">Dialogue</button>
+            <button class="btn btn-sm btn-outline-primary ms-2 file-action-button" data-action="generateDialogue" data-id="{{ file.id }}">Dialogue</button>
         {% endif %}
     </div>
 </li>
