@@ -5,7 +5,8 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 import json
 import fitz # PyMuPDF
-from google import genai
+import google.generativeai as genai
+from google.generativeai import types
 import wave
 
 app = Flask(__name__)
@@ -79,22 +80,6 @@ def get_settings():
         db.session.rollback()
         return Settings.query.first()
 
-def get_gemini_client():
-    settings = get_settings()
-    api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
-
-    if not api_key:
-        raise ValueError("Gemini API key is not set. Please set it in the settings page or as an environment variable.")
-
-    # The user's example implies that genai.Client() will work
-    # and the error message says genai.configure() does not exist.
-    # I will trust the user's provided code.
-    # The client will likely pick up the API key from the environment.
-    os.environ['GEMINI_API_KEY'] = api_key
-
-    # Let's follow the user's guide.
-    client = genai.Client()
-    return client
 
 def process_pdf(filepath):
     doc = fitz.open(filepath)
@@ -203,9 +188,12 @@ def summarize(file_id):
     text = pdf_file.text
     settings = get_settings()
 
+    if not app.gemini_client:
+        summary = "Error: Gemini client is not initialized. Please check the API key."
+        return render_template('summary.html', summary=summary)
+
     try:
-        client = get_gemini_client()
-        response = client.models.generate_content(
+        response = app.gemini_client.models.generate_content(
             model=settings.summary_model,
             contents=[f"Summarize the following text:\n\n{text}"]
         )
@@ -240,9 +228,10 @@ def generate_dialogue(file_id):
     text = pdf_file.text
     settings = get_settings()
 
-    try:
-        client = get_gemini_client()
+    if not app.gemini_client:
+        return {'error': 'Gemini client is not initialized. Please check the API key.'}, 500
 
+    try:
         # 1. Generate dialogue script with a standard Gemini model
         script_prompt = f"""
         Based on the following text, generate a dialogue script for a podcast episode between a 'Host' and an 'Expert'.
@@ -256,7 +245,7 @@ def generate_dialogue(file_id):
         ---
         """
         generation_config = {"response_mime_type": "application/json"}
-        response = client.models.generate_content(
+        response = app.gemini_client.models.generate_content(
             model=settings.dialogue_model,
             contents=[script_prompt],
             generation_config=generation_config
@@ -272,7 +261,7 @@ def generate_dialogue(file_id):
                 tts_prompt += f"{speaker}: {line}\n"
 
         # 3. Generate multi-speaker TTS audio
-        tts_response = client.models.generate_content(
+        tts_response = app.gemini_client.models.generate_content(
            model="gemini-2.5-flash-preview-tts",
            contents=tts_prompt,
            generation_config=types.GenerateContentConfig(
@@ -330,3 +319,21 @@ def settings():
         return redirect(url_for('settings'))
 
     return render_template('settings.html', settings=settings)
+
+def init_gemini_client(app_instance):
+    with app_instance.app_context():
+        settings = get_settings()
+        api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
+        if api_key:
+            try:
+                client = genai.Client(api_key=api_key)
+                app_instance.gemini_client = client
+                app_instance.logger.info("Gemini Client initialized successfully.")
+            except Exception as e:
+                app_instance.logger.error(f"Failed to initialize Gemini Client: {e}")
+                app_instance.gemini_client = None
+        else:
+            app_instance.logger.warning("Gemini API key not found. Generative features will be disabled.")
+            app_instance.gemini_client = None
+
+init_gemini_client(app)
