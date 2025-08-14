@@ -219,13 +219,13 @@ function renameFile(fileId, oldFilename) {
 
                     const viewDiv = fileItemElement.querySelector('.file-item');
                     if (viewDiv) {
-                        viewDiv.dataset.filename = JSON.stringify(data.new_filename);
+                        viewDiv.dataset.filename = data.new_filename;
                         viewDiv.dataset.url = data.new_url;
                     }
 
                     const renameButton = fileItemElement.querySelector('[data-action="renameFile"]');
                     if (renameButton) {
-                        renameButton.dataset.filename = JSON.stringify(data.new_filename);
+                        renameButton.dataset.filename = data.new_filename;
                     }
                 }
             } else {
@@ -297,7 +297,7 @@ function renameFolder(folderId, oldName) {
                     folderItem.querySelector('strong').textContent = data.new_name;
                     const renameButton = folderItem.querySelector('[data-action="renameFolder"]');
                     if (renameButton) {
-                        renameButton.dataset.name = JSON.stringify(data.new_name);
+                        renameButton.dataset.name = newName;
                     }
                 }
             } else {
@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             switch (action) {
                 case 'renameFile':
-                    renameFile(id, JSON.parse(filename));
+                    renameFile(id, filename);
                     break;
                 case 'moveFile':
                     moveFile(id);
@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     generateDialogue(id);
                     break;
                 case 'renameFolder':
-                    renameFolder(id, JSON.parse(name));
+                    renameFolder(id, name);
                     break;
                 case 'deleteFolder':
                     deleteFolder(id);
@@ -346,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else if (fileItem) {
             const { url, id, filename } = fileItem.dataset;
-            viewPdf(url, id, JSON.parse(filename));
+            viewPdf(url, id, filename);
         }
     });
 });
