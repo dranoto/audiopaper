@@ -9,6 +9,7 @@ const scale = 1.5;
 const canvas = document.getElementById('pdf-canvas');
 const ctx = canvas.getContext('2d');
 const audioPlayer = document.getElementById('audio-player');
+const converter = new showdown.Converter();
 
 // --- PDF Rendering ---
 function renderPage(num) {
@@ -116,10 +117,12 @@ function updateFileContent(fileId) {
         .then(response => response.json())
         .then(data => {
             if (data.summary) {
-                document.getElementById('summary-content').innerHTML = `<pre>${data.summary}</pre>`;
+                const summaryHtml = converter.makeHtml(data.summary);
+                document.getElementById('summary-content').innerHTML = summaryHtml;
             }
             if (data.dialogue_transcript) {
-                document.getElementById('dialogue-content').innerHTML = `<pre>${data.dialogue_transcript}</pre>`;
+                const dialogueHtml = converter.makeHtml(data.dialogue_transcript);
+                document.getElementById('dialogue-content').innerHTML = dialogueHtml;
             }
             if (data.audio_url) {
                 audioPlayer.src = data.audio_url;
