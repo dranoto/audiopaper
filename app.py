@@ -230,7 +230,7 @@ def summarize_file(file_id):
         model_name = f"models/{settings.summary_model}"
         
         app.logger.info(f"Generating summary with model {model_name}...")
-        response = app.gemini_client.generate_content(
+        response = app.gemini_client.models.generate_content(
             model=model_name,
             contents=[uploaded_file, prompt]
         )
@@ -275,7 +275,7 @@ def generate_dialogue(file_id):
         ---
         """
         dialogue_model_name = f"models/{settings.dialogue_model}"
-        response = app.gemini_client.generate_content(
+        response = app.gemini_client.models.generate_content(
             model=dialogue_model_name,
             contents=script_prompt,
             generation_config=types.GenerationConfig(response_mime_type="application/json")
@@ -290,9 +290,8 @@ def generate_dialogue(file_id):
         for part in dialogue:
             tts_prompt += f"{part.get('speaker', 'Expert')}: {part.get('line', '')}\n"
 
-        tts_model = app.gemini_client.models.get(settings.tts_model)
-        
-        generation_config = types.GenerateContentConfig(
+        tts_model_name = f"models/{settings.tts_model}"
+        generation_config = types.GenerationConfig(
             response_modalities=["AUDIO"],
             speech_config=types.SpeechConfig(
                 multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
@@ -310,7 +309,11 @@ def generate_dialogue(file_id):
             )
         )
         
-        tts_response = tts_model.generate_content(tts_prompt, generation_config=generation_config)
+        tts_response = app.gemini_client.models.generate_content(
+            model=tts_model_name,
+            contents=[tts_prompt],
+            generation_config=generation_config
+        )
         
         audio_part = tts_response.candidates[0].content.parts[0]
         audio_data = audio_part.inline_data.data
