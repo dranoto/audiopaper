@@ -263,33 +263,31 @@ def generate_dialogue(file_id):
     if not app.gemini_client:
         return {'error': 'Gemini client is not initialized. Please check API key.'}, 500
 
+    uploaded_file = None
     try:
-        script_prompt = f"""
-        Based on the following summary, generate a dialogue script for a podcast episode between a 'Host' and an 'Expert'.
-        The dialogue should be engaging and informative. The Host should ask questions and the Expert should explain the concepts.
-        Format the output as a valid JSON array of objects, where each object has a 'speaker' ('Host' or 'Expert') and a 'line'.
+        filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
+        app.logger.info(f"Uploading {filepath} to Gemini File API for dialogue generation...")
+        uploaded_file = app.gemini_client.files.upload(file=filepath)
 
-        Here is the summary:
-        ---
-        {pdf_file.summary or pdf_file.text[:8000]}
-        ---
+        transcript_prompt = f"""
+        Generate a podcast-style dialogue script based on the attached document.
+        The script should be a conversation between a 'Host' and an 'Expert'.
+        The Host should ask engaging questions, and the Expert should explain the key concepts from the document clearly.
+        Start each line with the speaker's name followed by a colon (e.g., "Host: ...").
         """
         dialogue_model_name = f"models/{settings.dialogue_model}"
-        response = app.gemini_client.models.generate_content(
+        app.logger.info(f"Generating transcript with model {dialogue_model_name}...")
+        transcript_response = app.gemini_client.models.generate_content(
             model=dialogue_model_name,
-            contents=script_prompt,
-            generation_config=types.GenerationConfig(response_mime_type="application/json")
+            contents=[uploaded_file, transcript_prompt]
         )
-        cleaned_json = re.sub(r'```json\n?|```', '', response.text.strip())
-        dialogue = json.loads(cleaned_json)
+        transcript = transcript_response.text
 
-        pdf_file.dialogue_transcript = json.dumps(dialogue, indent=2)
+        pdf_file.dialogue_transcript = transcript
         db.session.commit()
+        app.logger.info(f"Transcript saved for file_id {file_id}.")
 
-        tts_prompt = "TTS the following conversation between Host and Expert:\n"
-        for part in dialogue:
-            tts_prompt += f"{part.get('speaker', 'Expert')}: {part.get('line', '')}\n"
-
+        app.logger.info(f"Generating audio from transcript...")
         tts_model_name = f"models/{settings.tts_model}"
         tts_config = types.GenerateContentConfig(
             response_modalities=["AUDIO"],
@@ -311,7 +309,7 @@ def generate_dialogue(file_id):
         
         tts_response = app.gemini_client.models.generate_content(
             model=tts_model_name,
-            contents=[tts_prompt],
+            contents=[transcript],
             config=tts_config
         )
         
@@ -334,6 +332,10 @@ def generate_dialogue(file_id):
     except Exception as e:
         app.logger.error(f"Error generating dialogue for file_id {file_id}: {e}")
         return {'error': f'An error occurred: {e}'}, 500
+    finally:
+        if uploaded_file:
+            app.logger.info(f"Deleting uploaded file {uploaded_file.name} from Gemini server.")
+            app.gemini_client.files.delete(name=uploaded_file.name)
 
 
 @app.route('/settings', methods=['GET', 'POST'])
