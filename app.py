@@ -5,7 +5,8 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 import json
 import fitz # PyMuPDF
-from google import genai
+import google.generativeai as genai
+from google.generativeai import types
 import wave
 
 app = Flask(__name__)
@@ -79,21 +80,6 @@ def get_settings():
         db.session.rollback()
         return Settings.query.first()
 
-def get_gemini_model(model_type='summary'):
-    settings = get_settings()
-    api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
-
-    if not api_key:
-        raise ValueError("Gemini API key is not set. Please set it in the settings page or as an environment variable.")
-
-    genai.configure(api_key=api_key)
-
-    if model_type == 'summary':
-        model_name = settings.summary_model
-    else: # dialogue
-        model_name = settings.dialogue_model
-
-    return genai.GenerativeModel(model_name)
 
 def process_pdf(filepath):
     doc = fitz.open(filepath)
@@ -200,10 +186,17 @@ def upload_file():
 def summarize(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     text = pdf_file.text
+    settings = get_settings()
+
+    if not app.gemini_client:
+        summary = "Error: Gemini client is not initialized. Please check the API key."
+        return render_template('summary.html', summary=summary)
 
     try:
-        model = get_gemini_model('summary')
-        response = model.generate_content(f"Summarize the following text:\n\n{text}")
+        response = app.gemini_client.models.generate_content(
+            model=settings.summary_model,
+            contents=[f"Summarize the following text:\n\n{text}"]
+        )
         summary = response.text
     except Exception as e:
         app.logger.error(f"Error generating summary for file_id {file_id}: {e}")
@@ -235,9 +228,11 @@ def generate_dialogue(file_id):
     text = pdf_file.text
     settings = get_settings()
 
+    if not app.gemini_client:
+        return {'error': 'Gemini client is not initialized. Please check the API key.'}, 500
+
     try:
         # 1. Generate dialogue script with a standard Gemini model
-        text_model = get_gemini_model('dialogue')
         script_prompt = f"""
         Based on the following text, generate a dialogue script for a podcast episode between a 'Host' and an 'Expert'.
         The dialogue should be engaging and informative, summarizing the key points of the text.
@@ -250,7 +245,11 @@ def generate_dialogue(file_id):
         ---
         """
         generation_config = {"response_mime_type": "application/json"}
-        response = text_model.generate_content(script_prompt, generation_config=generation_config)
+        response = app.gemini_client.models.generate_content(
+            model=settings.dialogue_model,
+            contents=[script_prompt],
+            generation_config=generation_config
+        )
         dialogue = json.loads(response.text)
 
         # 2. Format the script for the TTS model
@@ -262,39 +261,34 @@ def generate_dialogue(file_id):
                 tts_prompt += f"{speaker}: {line}\n"
 
         # 3. Generate multi-speaker TTS audio
-        # The user's example used a different client structure.
-        # I will adapt it to the `google-generativeai` SDK.
-        # The `get_gemini_model` call above has already configured the API key.
-
-        client = genai.GenerativeModel('models/gemini-2.5-flash-preview-tts') # This model name is from the user's example
-
-        tts_response = client.generate_content(
-            contents=[tts_prompt],
-            generation_config=types.GenerationConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
-                        speaker_voice_configs=[
-                            types.SpeakerVoiceConfig(
-                                speaker='Host',
-                                voice_config=types.VoiceConfig(
-                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                        voice_name=settings.tts_host_voice,
-                                    )
-                                )
-                            ),
-                            types.SpeakerVoiceConfig(
-                                speaker='Expert',
-                                voice_config=types.VoiceConfig(
-                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                        voice_name=settings.tts_expert_voice,
-                                    )
-                                )
-                            ),
-                        ]
-                    )
-                )
-            )
+        tts_response = app.gemini_client.models.generate_content(
+           model="gemini-2.5-flash-preview-tts",
+           contents=[tts_prompt],
+           generation_config=types.GenerateContentConfig(
+              response_modalities=["AUDIO"],
+              speech_config=types.SpeechConfig(
+                 multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+                    speaker_voice_configs=[
+                       types.SpeakerVoiceConfig(
+                          speaker='Host',
+                          voice_config=types.VoiceConfig(
+                             prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=settings.tts_host_voice,
+                             )
+                          )
+                       ),
+                       types.SpeakerVoiceConfig(
+                          speaker='Expert',
+                          voice_config=types.VoiceConfig(
+                             prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=settings.tts_expert_voice,
+                             )
+                          )
+                       ),
+                    ]
+                 )
+              )
+           )
         )
 
         audio_data = tts_response.candidates[0].content.parts[0].inline_data.data
@@ -325,3 +319,21 @@ def settings():
         return redirect(url_for('settings'))
 
     return render_template('settings.html', settings=settings)
+
+def init_gemini_client(app_instance):
+    with app_instance.app_context():
+        settings = get_settings()
+        api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
+        if api_key:
+            try:
+                client = genai.Client(api_key=api_key)
+                app_instance.gemini_client = client
+                app_instance.logger.info("Gemini Client initialized successfully.")
+            except Exception as e:
+                app_instance.logger.error(f"Failed to initialize Gemini Client: {e}")
+                app_instance.gemini_client = None
+        else:
+            app_instance.logger.warning("Gemini API key not found. Generative features will be disabled.")
+            app_instance.gemini_client = None
+
+init_gemini_client(app)
