@@ -1,5 +1,6 @@
 <li class="nav-item" id="file-item-{{ file.id }}">
-    <div class="d-flex justify-content-between align-items-center file-item" onclick='viewPdf('{{ url_for('uploaded_file', filename=file.filename) }}', {{ file.id }}, {{ file.filename|tojson }})' style="cursor: pointer;">
+    <div class="d-flex justify-content-between align-items-center file-item" onclick='viewPdf("{{ url_for('uploaded_file', filename=file.filename) }}", {{ file.id }}, {{ file.filename|tojson }})' style="cursor: pointer;">
+        
         <a class="nav-link" href="#">
             <i class="bi bi-file-earmark-text me-2"></i>
             <span>{{ file.filename }}</span>
