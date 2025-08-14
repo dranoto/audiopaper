@@ -227,10 +227,13 @@ def summarize_file(file_id):
         uploaded_file = app.gemini_client.files.upload(file=filepath)
 
         prompt = settings.summary_prompt
-        model = app.gemini_client.models.get(settings.summary_model)
+        model_name = f"models/{settings.summary_model}"
         
-        app.logger.info(f"Generating summary with model {settings.summary_model}...")
-        response = model.generate_content([uploaded_file, prompt])
+        app.logger.info(f"Generating summary with model {model_name}...")
+        response = app.gemini_client.generate_content(
+            model=model_name,
+            contents=[uploaded_file, prompt]
+        )
         
         pdf_file.summary = response.text
         db.session.commit()
@@ -271,10 +274,11 @@ def generate_dialogue(file_id):
         {pdf_file.summary or pdf_file.text[:8000]}
         ---
         """
-        model = app.gemini_client.models.get(settings.dialogue_model)
-        response = model.generate_content(
-            script_prompt,
-            generation_config={"response_mime_type": "application/json"}
+        dialogue_model_name = f"models/{settings.dialogue_model}"
+        response = app.gemini_client.generate_content(
+            model=dialogue_model_name,
+            contents=script_prompt,
+            generation_config=types.GenerationConfig(response_mime_type="application/json")
         )
         cleaned_json = re.sub(r'```json\n?|```', '', response.text.strip())
         dialogue = json.loads(cleaned_json)
