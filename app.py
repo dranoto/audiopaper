@@ -24,6 +24,7 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['GENERATED_AUDIO_FOLDER'] = 'generated_audio'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
+app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME', 'localhost:5000')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 ALLOWED_EXTENSIONS = {'pdf'}
 
@@ -109,9 +110,10 @@ def _run_summary_generation(app, task_id, file_id):
             db.session.rollback()
             app.logger.error(f"Task {task_id}: Error generating summary for file_id {file_id}: {e}")
             task = Task.query.get(task_id)
-            task.status = 'error'
-            task.result = json.dumps({'error': str(e)})
-            db.session.commit()
+            if task:
+                task.status = 'error'
+                task.result = json.dumps({'error': str(e)})
+                db.session.commit()
         finally:
             if 'uploaded_file' in locals() and uploaded_file:
                 app.logger.info(f"Task {task_id}: Deleting uploaded file {uploaded_file.name}.")
@@ -231,9 +233,10 @@ def _run_dialogue_generation(app, task_id, file_id):
             db.session.rollback()
             app.logger.error(f"Task {task_id}: Error generating dialogue for file_id {file_id}: {e}")
             task = Task.query.get(task_id)
-            task.status = 'error'
-            task.result = json.dumps({'error': str(e)})
-            db.session.commit()
+            if task:
+                task.status = 'error'
+                task.result = json.dumps({'error': str(e)})
+                db.session.commit()
         finally:
             if 'uploaded_file' in locals() and uploaded_file:
                 app.logger.info(f"Task {task_id}: Deleting uploaded file {uploaded_file.name}.")
