@@ -5,100 +5,79 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paper to Podcast</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <div class="container-fluid">
         <div class="row">
-            <nav id="left-column" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+            <nav id="left-column" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
                 <div class="position-sticky pt-3">
-                    <h2 class="px-3">Folders</h2>
+                    <div class="sidebar-header px-3 mb-3">
+                        <h1 class="h4">AudioPaper</h1>
+                        <span>Your AI Podcast Studio</span>
+                    </div>
+
+                    <div class="px-3 mb-3">
+                        <form action="/upload" method="post" enctype="multipart/form-data">
+                             <label for="folder_id_upload" class="form-label small">Upload to Folder</label>
+                             <select class="form-select form-select-sm mb-2" name="folder_id" id="folder_id_upload">
+                                <option value="">(No Folder)</option>
+                                {% for folder in folders %}
+                                <option value="{{ folder.id }}">{{ folder.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <input type="file" name="file" class="form-control form-control-sm" accept="application/pdf" onchange="this.form.submit()">
+                        </form>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <h6 class="text-uppercase">Library</h6>
+                        <form action="/create_folder" method="post" class="d-flex">
+                            <input type="text" name="folder_name" class="form-control form-control-sm me-2" placeholder="New Folder..." required>
+                            <button class="btn btn-sm btn-secondary" type="submit" title="Create New Folder"><i class="bi bi-plus-lg"></i></button>
+                        </form>
+                    </div>
+
                     <div id="file-list">
                         <ul class="nav flex-column">
-                            {% for folder in folders %}
+                             {% for folder in folders %}
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#">
-                                        <strong>{{ folder.name }}</strong>
-                                    </a>
+                                    <div class="d-flex justify-content-between align-items-center folder-item">
+                                        <a class="nav-link" href="#">
+                                            <i class="bi bi-folder-fill me-2"></i>
+                                            <strong>{{ folder.name }}</strong>
+                                        </a>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-ghost" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="bi bi-three-dots-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#" onclick="renameFolder({{ folder.id }}, '{{ folder.name }}')">Rename</a></li>
+                                                <li><a class="dropdown-item" href="#" onclick="deleteFolder({{ folder.id }})">Delete</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
                                     <ul class="nav flex-column ms-3">
                                         {% for file in folder.files %}
-                                        <li class="nav-item">
-                                            <div class="d-flex align-items-center">
-                                                <a class="nav-link" href="#" onclick="viewPdf('{{ url_for('uploaded_file', filename=file.filename) }}', {{ file.id }})">
-                                                    {{ file.filename }}
-                                                </a>
-                                                {% if file.summary %}
-                                                    <a href="{{ url_for('view_summary', file_id=file.id) }}" class="btn btn-sm btn-success ms-2">View Summary</a>
-                                                {% else %}
-                                                    <button class="btn btn-sm btn-outline-secondary ms-2" onclick="summarizeFile({{ file.id }})">Summarize</button>
-                                                {% endif %}
-                                                {% if file.dialogue_transcript %}
-                                                    <a href="{{ url_for('view_summary', file_id=file.id) }}" class="btn btn-sm btn-success ms-2">View Dialogue</a>
-                                                {% else %}
-                                                    <button class="btn btn-sm btn-outline-primary ms-2" onclick="generateDialogue({{ file.id }})">Dialogue</button>
-                                                {% endif %}
-                                            </div>
-                                        </li>
+                                        {% include 'file_item.html' %}
                                         {% endfor %}
                                     </ul>
                                 </li>
                             {% endfor %}
                             {% for file in files_without_folder %}
-                                <li class="nav-item">
-                                    <div class="d-flex align-items-center">
-                                        <a class="nav-link" href="#" onclick="viewPdf('{{ url_for('uploaded_file', filename=file.filename) }}', {{ file.id }})">
-                                            {{ file.filename }}
-                                        </a>
-                                        {% if file.summary %}
-                                            <a href="{{ url_for('view_summary', file_id=file.id) }}" class="btn btn-sm btn-success ms-2">View Summary</a>
-                                        {% else %}
-                                            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="summarizeFile({{ file.id }})">Summarize</button>
-                                        {% endif %}
-                                        {% if file.dialogue_transcript %}
-                                            <a href="{{ url_for('view_summary', file_id=file.id) }}" class="btn btn-sm btn-success ms-2">View Dialogue</a>
-                                        {% else %}
-                                            <button class="btn btn-sm btn-outline-primary ms-2" onclick="generateDialogue({{ file.id }})">Dialogue</button>
-                                        {% endif %}
-                                    </div>
-                                </li>
+                                {% include 'file_item.html' %}
                             {% endfor %}
                         </ul>
-                    </div>
-                    <hr>
-                    <div class="px-3">
-                        <h3>Create New Folder</h3>
-                        <form action="/create_folder" method="post">
-                            <div class="input-group mb-3">
-                                <input type="text" name="folder_name" class="form-control" placeholder="Folder Name">
-                                <button class="btn btn-outline-secondary" type="submit">Create</button>
-                            </div>
-                        </form>
-                    </div>
-                    <hr>
-                    <div class="px-3">
-                        <h3>Upload New PDF</h3>
-                        <form action="/upload" method="post" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <input type="file" name="file" class="form-control" accept="application/pdf">
-                            </div>
-                            <div class="mb-3">
-                                <label for="folder_id" class="form-label">Select Folder</label>
-                                <select class="form-select" name="folder_id" id="folder_id">
-                                    <option value="">(No Folder)</option>
-                                    {% for folder in folders %}
-                                    <option value="{{ folder.id }}">{{ folder.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Upload</button>
-                        </form>
                     </div>
                 </div>
             </nav>
 
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content d-flex flex-column">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">Paper to Podcast</h1>
+                    <h1 id="main-content-title" class="h2">Select a file to view</h1>
                     <div class="btn-toolbar mb-2 mb-md-0">
                         <a href="{{ url_for('settings') }}" class="btn btn-sm btn-outline-secondary">
                             Settings
@@ -106,22 +85,47 @@
                     </div>
                 </div>
 
-                <div id="pdf-viewer" class="border text-center">
-                    <div id="pagination-controls" style="display: none;">
-                        <button id="prev" class="btn btn-secondary">Previous</button>
-                        <span>Page: <span id="page_num"></span> / <span id="page_count"></span></span>
-                        <button id="next" class="btn btn-secondary">Next</button>
+                <!-- Tab navigation -->
+                <ul class="nav nav-tabs" id="myTab" role="tablist" style="display: none;">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="document-tab" data-bs-toggle="tab" data-bs-target="#document-tab-pane" type="button" role="tab" aria-controls="document-tab-pane" aria-selected="true">Document</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-tab-pane" type="button" role="tab" aria-controls="summary-tab-pane" aria-selected="false">Summary</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dialogue-tab" data-bs-toggle="tab" data-bs-target="#dialogue-tab-pane" type="button" role="tab" aria-controls="dialogue-tab-pane" aria-selected="false">Dialogue</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="figures-tab" data-bs-toggle="tab" data-bs-target="#figures-tab-pane" type="button" role="tab" aria-controls="figures-tab-pane" aria-selected="false">Figures</button>
+                    </li>
+                </ul>
+
+                <!-- Tab content -->
+                <div class="tab-content flex-grow-1" id="myTabContent">
+                    <div class="tab-pane fade show active" id="document-tab-pane" role="tabpanel" aria-labelledby="document-tab">
+                        <div id="pdf-viewer" class="border text-center mt-2">
+                            <div id="pagination-controls" class="p-2" style="display: none;">
+                                <button id="prev" class="btn btn-secondary">Previous</button>
+                                <span>Page: <span id="page_num"></span> / <span id="page_count"></span></span>
+                                <button id="next" class="btn btn-secondary">Next</button>
+                            </div>
+                            <canvas id="pdf-canvas"></canvas>
+                        </div>
                     </div>
-                    <canvas id="pdf-canvas"></canvas>
+                    <div class="tab-pane fade p-3" id="summary-tab-pane" role="tabpanel" aria-labelledby="summary-tab">
+                        <div id="summary-content"></div>
+                    </div>
+                    <div class="tab-pane fade p-3" id="dialogue-tab-pane" role="tabpanel" aria-labelledby="dialogue-tab">
+                        <div id="dialogue-content"></div>
+                    </div>
+                    <div class="tab-pane fade p-3" id="figures-tab-pane" role="tabpanel" aria-labelledby="figures-tab">
+                        <div id="figures-container" class="row"></div>
+                    </div>
                 </div>
 
-                <div class="mt-3">
-                    <h3>Extracted Figures</h3>
-                    <div id="figures-container"></div>
-                </div>
 
-
-                <div class="mt-auto p-3">
+                <div class="mt-auto p-3 bg-light border-top">
                     <audio id="audio-player" class="w-100" controls>
                         Your browser does not support the audio element.
                     </audio>
