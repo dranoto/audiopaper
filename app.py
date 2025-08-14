@@ -311,22 +311,13 @@ def generate_dialogue(file_id):
         )
         audio_data = tts_response.candidates[0].content.parts[0].inline_data.data
 
-        # 4. Save the audio file as WAV then convert to MP3
-        wav_filename = f"dialogue_{file_id}.wav"
+        # 4. Save the audio file as MP3
         mp3_filename = f"dialogue_{file_id}.mp3"
-        wav_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], wav_filename)
         mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
 
-        # Write WAV data
-        with open(wav_filepath, "wb") as f:
-            f.write(audio_data)
-
-        # Convert WAV to MP3
-        audio = AudioSegment.from_wav(wav_filepath)
+        # Convert WAV data (in memory) to MP3
+        audio = AudioSegment.from_wav(io.BytesIO(audio_data))
         audio.export(mp3_filepath, format="mp3")
-
-        # Clean up the temporary WAV file
-        os.remove(wav_filepath)
 
         # 5. Return URL to the audio file
         audio_url = url_for('generated_audio', filename=mp3_filename)
