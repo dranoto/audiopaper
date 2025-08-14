@@ -1,5 +1,6 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
+let currentFileId = null;
 let pdfDoc = null;
 let pageNum = 1;
 let pageRendering = false;
@@ -7,6 +8,7 @@ let pageNumPending = null;
 const scale = 1.5;
 const canvas = document.getElementById('pdf-canvas');
 const ctx = canvas.getContext('2d');
+const audioPlayer = document.getElementById('audio-player');
 
 function renderPage(num) {
     pageRendering = true;
@@ -41,25 +43,32 @@ function queueRenderPage(num) {
     }
 }
 
-function onPrevPage() {
-    if (pageNum <= 1) {
-        return;
-    }
+document.getElementById('prev').addEventListener('click', () => {
+    if (pageNum <= 1) return;
     pageNum--;
     queueRenderPage(pageNum);
-}
-document.getElementById('prev').addEventListener('click', onPrevPage);
+});
 
-function onNextPage() {
-    if (pageNum >= pdfDoc.numPages) {
-        return;
-    }
+document.getElementById('next').addEventListener('click', () => {
+    if (pageNum >= pdfDoc.numPages) return;
     pageNum++;
     queueRenderPage(pageNum);
-}
-document.getElementById('next').addEventListener('click', onNextPage);
+});
 
-function viewPdf(url, fileId) {
+function viewPdf(url, fileId, filename) {
+    currentFileId = fileId;
+
+    // Update UI
+    document.getElementById('main-content-title').textContent = filename;
+    document.getElementById('myTab').style.display = 'flex';
+
+    // Reset content areas
+    document.getElementById('summary-content').innerHTML = '<p>No summary generated yet.</p>';
+    document.getElementById('dialogue-content').innerHTML = '<p>No dialogue generated yet.</p>';
+    document.getElementById('figures-container').innerHTML = '<p>Loading figures...</p>';
+    audioPlayer.src = '';
+
+    // Load PDF
     pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
         pdfDoc = pdfDoc_;
         document.getElementById('page_count').textContent = pdfDoc.numPages;
@@ -68,14 +77,13 @@ function viewPdf(url, fileId) {
         document.getElementById('pagination-controls').style.display = 'block';
     });
 
+    // Fetch figures
     fetch(`/file_details/${fileId}`)
         .then(response => response.json())
         .then(data => {
             const figuresContainer = document.getElementById('figures-container');
             figuresContainer.innerHTML = '';
             if (data.figures && data.figures.length > 0) {
-                const row = document.createElement('div');
-                row.className = 'row';
                 data.figures.forEach((figure_path, index) => {
                     const col = document.createElement('div');
                     col.className = 'col-md-4 mb-3';
@@ -88,116 +96,175 @@ function viewPdf(url, fileId) {
                     cardBody.className = 'card-body';
                     const caption = document.createElement('p');
                     caption.className = 'card-text';
-                    caption.textContent = data.captions[index];
+                    caption.textContent = data.captions[index] || 'No caption available.';
                     cardBody.appendChild(caption);
                     card.appendChild(img);
                     card.appendChild(cardBody);
                     col.appendChild(card);
-                    row.appendChild(col);
+                    figuresContainer.appendChild(col);
                 });
-                figuresContainer.appendChild(row);
             } else {
                 figuresContainer.innerHTML = '<p>No figures found in this PDF.</p>';
             }
         });
+
+    // Fetch summary, dialogue, and audio
+    updateFileContent(fileId);
 }
 
-function toggleLoading(buttonId, isLoading) {
-    if (!buttonId) return;
-    const button = document.getElementById(buttonId);
-    if (!button) return;
-    const spinner = button.querySelector('.loading-spinner');
-    button.disabled = isLoading;
-    if (spinner) {
-        spinner.style.display = isLoading ? 'inline-block' : 'none';
-    }
+function updateFileContent(fileId) {
+    fetch(`/file_content/${fileId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.summary) {
+                document.getElementById('summary-content').innerHTML = `<pre>${data.summary}</pre>`;
+            }
+            if (data.dialogue_transcript) {
+                document.getElementById('dialogue-content').innerHTML = `<pre>${data.dialogue_transcript}</pre>`;
+            }
+            if (data.audio_url) {
+                audioPlayer.src = data.audio_url;
+            }
+        });
 }
 
-function handleError(errorId, error) {
-    if (!errorId) {
-        alert('An error occurred: ' + error);
-        console.error('Error:', error);
-        return;
-    }
-    const errorDiv = document.getElementById(errorId);
-    if (errorDiv) {
-        errorDiv.textContent = 'An error occurred: ' + error;
-        errorDiv.style.display = 'block';
-    }
+
+function showLoading(element, message) {
+    element.innerHTML = `<div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span><span>${message}</span></div>`;
 }
 
-function summarizeFile(fileId, buttonId, errorId) {
-    if (!buttonId) {
-        alert('Generating summary... this may take a moment. You will be redirected when it is complete.');
-    }
-    toggleLoading(buttonId, true);
-    if (errorId) {
-        const errorDiv = document.getElementById(errorId);
-        if (errorDiv) errorDiv.style.display = 'none';
-    }
+function summarizeFile(fileId) {
+    showLoading(document.getElementById('summary-content'), 'Generating summary...');
+    // Switch to summary tab
+    new bootstrap.Tab(document.getElementById('summary-tab')).show();
 
     fetch(`/summarize_file/${fileId}`, { method: 'POST' })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(errData => {
-                    throw new Error(errData.error || response.statusText);
-                }).catch(() => {
-                    throw new Error(`Request failed with status: ${response.status}`);
-                });
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            if (data.success && data.redirect_url) {
-                window.location.href = data.redirect_url;
+            if (data.success) {
+                updateFileContent(fileId);
+                // Also refresh the file list to show the "View Summary" button
+                location.reload();
             } else {
-                throw new Error(data.error || 'An unknown error occurred during summarization.');
+                document.getElementById('summary-content').innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
             }
         })
         .catch(err => {
-            handleError(errorId, err.message);
-        })
-        .finally(() => toggleLoading(buttonId, false));
+            document.getElementById('summary-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+        });
 }
 
-function generateDialogue(fileId, buttonId, errorId) {
-    if (!buttonId) {
-        alert('Generating dialogue... this may take a moment.');
-    }
-    toggleLoading(buttonId, true);
-    if (errorId) {
-        const errorDiv = document.getElementById(errorId);
-        if (errorDiv) errorDiv.style.display = 'none';
-    }
-    const audioPlayer = document.getElementById('audio-player');
+function generateDialogue(fileId) {
+    showLoading(document.getElementById('dialogue-content'), 'Generating dialogue and audio...');
+    // Switch to dialogue tab
+    new bootstrap.Tab(document.getElementById('dialogue-tab')).show();
 
     fetch(`/generate_dialogue/${fileId}`, { method: 'POST' })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(errData => {
-                    throw new Error(errData.error || response.statusText);
-                }).catch(() => {
-                    throw new Error(`Request failed with status: ${response.status}`);
-                });
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
             if (data.audio_url) {
-                if (buttonId) {
-                    window.location.reload();
-                } else {
-                    audioPlayer.src = data.audio_url;
-                    audioPlayer.load();
-                    audioPlayer.play();
-                    alert('Dialogue generated and is now playing.');
-                }
+                updateFileContent(fileId);
+                 // Also refresh the file list to show the "View Dialogue" button
+                location.reload();
             } else {
-                throw new Error(data.error || 'An unknown error occurred during dialogue generation.');
+                document.getElementById('dialogue-content').innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
             }
         })
         .catch(err => {
-            handleError(errorId, err.message);
+            document.getElementById('dialogue-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+        });
+}
+
+// --- File Management Functions ---
+
+function deleteFile(fileId) {
+    if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
+        return;
+    }
+    fetch(`/delete_file/${fileId}`, { method: 'DELETE' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload(); // Easiest way to refresh the list
+            } else {
+                alert('Error deleting file: ' + data.error);
+            }
         })
-        .finally(() => toggleLoading(buttonId, false));
+        .catch(err => alert('An error occurred: ' + err.message));
+}
+
+function renameFile(fileId, oldFilename) {
+    const newFilename = prompt('Enter new filename:', oldFilename);
+    if (newFilename && newFilename !== oldFilename) {
+        fetch(`/rename_file/${fileId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_filename: newFilename })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error renaming file: ' + data.error);
+            }
+        })
+        .catch(err => alert('An error occurred: ' + err.message));
+    }
+}
+
+function moveFile(fileId) {
+    const folderId = prompt('Enter the ID of the folder to move this file to (or "root" for no folder):');
+    if (folderId) {
+        fetch(`/move_file/${fileId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_folder_id: folderId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error moving file: ' + data.error);
+            }
+        })
+        .catch(err => alert('An error occurred: ' + err.message));
+    }
+}
+
+function deleteFolder(folderId) {
+    if (!confirm('Are you sure you want to delete this folder? It must be empty.')) {
+        return;
+    }
+    fetch(`/delete_folder/${folderId}`, { method: 'DELETE' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error deleting folder: ' + data.error);
+            }
+        })
+        .catch(err => alert('An error occurred: ' + err.message));
+}
+
+function renameFolder(folderId, oldName) {
+    const newName = prompt('Enter new folder name:', oldName);
+    if (newName && newName !== oldName) {
+        fetch(`/rename_folder/${folderId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_name: newName })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error renaming folder: ' + data.error);
+            }
+        })
+        .catch(err => alert('An error occurred: ' + err.message));
+    }
 }

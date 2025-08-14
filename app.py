@@ -106,15 +106,20 @@ def summarize_file(file_id):
             app.gemini_client.files.delete(name=uploaded_file.name)
 
 
-@app.route('/summary/<int:file_id>')
-def view_summary(file_id):
+@app.route('/file_content/<int:file_id>')
+def file_content(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     audio_url = None
     mp3_filename = f"dialogue_{file_id}.mp3"
     mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
     if os.path.exists(mp3_filepath):
         audio_url = url_for('generated_audio', filename=mp3_filename)
-    return render_template('summary.html', file=pdf_file, audio_url=audio_url)
+
+    return {
+        'summary': pdf_file.summary,
+        'dialogue_transcript': pdf_file.dialogue_transcript,
+        'audio_url': audio_url
+    }
 
 @app.route('/generate_dialogue/<int:file_id>', methods=['POST'])
 def generate_dialogue(file_id):
@@ -233,6 +238,116 @@ def file_details(file_id):
 @app.route('/generated_audio/<filename>')
 def generated_audio(filename):
     return send_from_directory(app.config['GENERATED_AUDIO_FOLDER'], filename)
+
+@app.route('/delete_file/<int:file_id>', methods=['DELETE'])
+def delete_file(file_id):
+    pdf_file = PDFFile.query.get_or_404(file_id)
+
+    # Delete the physical files
+    try:
+        # Delete PDF file
+        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+            app.logger.info(f"Deleted PDF file: {pdf_path}")
+
+        # Delete generated audio file
+        mp3_filename = f"dialogue_{file_id}.mp3"
+        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+        if os.path.exists(mp3_filepath):
+            os.remove(mp3_filepath)
+            app.logger.info(f"Deleted audio file: {mp3_filepath}")
+
+    except Exception as e:
+        app.logger.error(f"Error deleting physical files for file_id {file_id}: {e}")
+        return {'error': 'Error deleting physical files'}, 500
+
+    # Delete from database
+    db.session.delete(pdf_file)
+    db.session.commit()
+    app.logger.info(f"Deleted file_id {file_id} from database.")
+
+    return {'success': True}
+
+@app.route('/rename_file/<int:file_id>', methods=['POST'])
+def rename_file(file_id):
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    new_filename = request.json.get('new_filename')
+    if not new_filename:
+        return {'error': 'New filename is required'}, 400
+
+    # Ensure the new filename has a .pdf extension
+    if not new_filename.lower().endswith('.pdf'):
+        new_filename += '.pdf'
+
+    # Rename the physical file
+    try:
+        old_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
+        new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+
+        if os.path.exists(new_path):
+            return {'error': 'A file with this name already exists'}, 400
+
+        os.rename(old_path, new_path)
+        app.logger.info(f"Renamed {old_path} to {new_path}")
+
+        # Update filename in the database
+        pdf_file.filename = new_filename
+        db.session.commit()
+        app.logger.info(f"Renamed file_id {file_id} to {new_filename} in database.")
+
+        return {'success': True, 'new_filename': new_filename}
+    except Exception as e:
+        app.logger.error(f"Error renaming file for file_id {file_id}: {e}")
+        return {'error': 'Error renaming file'}, 500
+
+@app.route('/move_file/<int:file_id>', methods=['POST'])
+def move_file(file_id):
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    new_folder_id = request.json.get('new_folder_id')
+
+    # Allow moving to root (no folder)
+    if new_folder_id == 'root':
+        pdf_file.folder_id = None
+    else:
+        try:
+            target_folder = Folder.query.get_or_404(int(new_folder_id))
+            pdf_file.folder_id = target_folder.id
+        except (ValueError, TypeError):
+            return {'error': 'Invalid folder ID provided.'}, 400
+
+    db.session.commit()
+    app.logger.info(f"Moved file_id {file_id} to folder_id {new_folder_id}.")
+    return {'success': True}
+
+@app.route('/delete_folder/<int:folder_id>', methods=['DELETE'])
+def delete_folder(folder_id):
+    folder = Folder.query.get_or_404(folder_id)
+
+    # Note: This will cascade delete PDF files within the folder due to DB relationship
+    # and their physical files will be handled if the relationship is configured with cascade delete hooks.
+    # For now, we assume we only delete empty folders or the user knows the files will be deleted.
+    # A safer implementation would be to check if the folder is empty first.
+    if folder.files:
+        return {'error': 'Cannot delete a folder that is not empty.'}, 400
+
+    db.session.delete(folder)
+    db.session.commit()
+    app.logger.info(f"Deleted folder_id {folder_id}.")
+    return {'success': True}
+
+@app.route('/rename_folder/<int:folder_id>', methods=['POST'])
+def rename_folder(folder_id):
+    folder = Folder.query.get_or_404(folder_id)
+    new_name = request.json.get('new_name')
+    if not new_name:
+        return {'error': 'New folder name is required'}, 400
+
+    folder.name = new_name
+    db.session.commit()
+    app.logger.info(f"Renamed folder_id {folder_id} to {new_name}.")
+    return {'success': True, 'new_name': new_name}
+
 
 # --- App Initialization ---
 init_gemini_client(app)
