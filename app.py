@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, send_from_
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from google.genai import types
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from database import db, init_db, Folder, PDFFile, Settings, get_settings
 from services import (
     init_gemini_client,
@@ -272,51 +272,72 @@ def delete_file(file_id):
 @app.route('/rename_file/<int:file_id>', methods=['POST'])
 def rename_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
-    new_filename = request.json.get('new_filename')
-    if not new_filename:
+    new_filename_req = request.json.get('new_filename')
+    if not new_filename_req:
         return {'error': 'New filename is required'}, 400
 
-    if not new_filename.lower().endswith('.pdf'):
-        new_filename += '.pdf'
+    new_filename = new_filename_req if new_filename_req.lower().endswith('.pdf') else f"{new_filename_req}.pdf"
 
     original_filename = pdf_file.filename
-    old_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
-    new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+    old_pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+    new_pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
 
-    if os.path.exists(new_path):
+    if os.path.exists(new_pdf_path):
         return {'error': 'A file with this name already exists'}, 400
 
-    # 1. Rename the physical file
-    try:
-        os.rename(old_path, new_path)
-        app.logger.info(f"Renamed {old_path} to {new_path}")
-    except OSError as e:
-        app.logger.error(f"Error renaming physical file for file_id {file_id}: {e}")
-        return {'error': 'Failed to rename file on disk'}, 500
+    # Figure directory paths
+    old_fig_dir_basename = os.path.splitext(original_filename)[0]
+    new_fig_dir_basename = os.path.splitext(new_filename)[0]
+    old_fig_dir = os.path.join('static', 'figures', old_fig_dir_basename)
+    new_fig_dir = os.path.join('static', 'figures', new_fig_dir_basename)
 
-    # 2. Try to update the filename in the database
+    # --- Start Transaction ---
     try:
+        # 1. Rename PDF file
+        os.rename(old_pdf_path, new_pdf_path)
+        app.logger.info(f"Renamed PDF {old_pdf_path} to {new_pdf_path}")
+
+        # 2. Rename figures directory if it exists
+        if os.path.isdir(old_fig_dir):
+            os.rename(old_fig_dir, new_fig_dir)
+            app.logger.info(f"Renamed figures dir {old_fig_dir} to {new_fig_dir}")
+
+        # 3. Update database
         pdf_file.filename = new_filename
+        if pdf_file.figures:
+            figures_list = json.loads(pdf_file.figures)
+            updated_figures = [p.replace(f"static/figures/{old_fig_dir_basename}", f"static/figures/{new_fig_dir_basename}", 1) for p in figures_list]
+            pdf_file.figures = json.dumps(updated_figures)
+
         db.session.commit()
-        app.logger.info(f"Renamed file_id {file_id} to {new_filename} in database.")
-        return {'success': True, 'new_filename': new_filename}
-    except SQLAlchemyError as e:
+        app.logger.info(f"Updated database for file_id {file_id} to new name {new_filename}")
+
+        return {
+            'success': True,
+            'new_filename': new_filename,
+            'new_url': url_for('uploaded_file', filename=new_filename)
+        }
+
+    except (OSError, SQLAlchemyError) as e:
         db.session.rollback()
-        app.logger.error(f"Database error renaming file_id {file_id}, rolling back: {e}")
+        app.logger.error(f"Error during rename for file_id {file_id}: {e}. Rolling back changes.")
 
-        # 3. Attempt to roll back the physical file rename
-        try:
-            os.rename(new_path, old_path)
-            app.logger.info(f"Successfully rolled back file rename from {new_path} to {old_path}")
-        except OSError as rollback_e:
-            app.logger.critical(
-                f"CRITICAL: Failed to roll back file rename for file_id {file_id}. "
-                f"File is at {new_path} but DB has {original_filename}. Manual intervention required. "
-                f"Rollback error: {rollback_e}"
-            )
-            return {'error': 'A critical error occurred: Database update failed and filesystem rollback also failed. Please contact support.'}, 500
+        # Attempt to roll back filesystem changes
+        if os.path.exists(new_pdf_path) and not os.path.exists(old_pdf_path):
+            try:
+                os.rename(new_pdf_path, old_pdf_path)
+                app.logger.info(f"Rolled back PDF rename from {new_pdf_path} to {old_pdf_path}")
+            except OSError as rollback_e:
+                app.logger.critical(f"CRITICAL: Filesystem rollback failed for PDF. Path: {new_pdf_path}. DB rolled back. Error: {rollback_e}")
 
-        return {'error': 'Failed to update file record in the database. The file rename has been reverted.'}, 500
+        if os.path.exists(new_fig_dir) and not os.path.exists(old_fig_dir):
+            try:
+                os.rename(new_fig_dir, old_fig_dir)
+                app.logger.info(f"Rolled back figures dir rename from {new_fig_dir} to {old_fig_dir}")
+            except OSError as rollback_e:
+                app.logger.critical(f"CRITICAL: Filesystem rollback failed for figures dir. Path: {new_fig_dir}. DB rolled back. Error: {rollback_e}")
+
+        return {'error': 'An error occurred during the rename operation. All changes have been reverted.'}, 500
 
 @app.route('/move_file/<int:file_id>', methods=['POST'])
 def move_file(file_id):
@@ -352,10 +373,17 @@ def rename_folder(folder_id):
     if not new_name:
         return {'error': 'New folder name is required'}, 400
 
+    original_name = folder.name
     folder.name = new_name
-    db.session.commit()
-    app.logger.info(f"Renamed folder_id {folder_id} to {new_name}.")
-    return {'success': True, 'new_name': new_name}
+    try:
+        db.session.commit()
+        app.logger.info(f"Renamed folder_id {folder_id} from '{original_name}' to '{new_name}'.")
+        return {'success': True, 'new_name': new_name}
+    except IntegrityError:
+        db.session.rollback()
+        folder.name = original_name  # Revert the name in the object
+        app.logger.warning(f"Failed to rename folder_id {folder_id} to '{new_name}' because the name already exists.")
+        return {'error': 'A folder with this name already exists.'}, 400
 
 
 # --- App Initialization ---
