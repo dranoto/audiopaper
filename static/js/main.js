@@ -10,6 +10,7 @@ const canvas = document.getElementById('pdf-canvas');
 const ctx = canvas.getContext('2d');
 const audioPlayer = document.getElementById('audio-player');
 
+// --- PDF Rendering ---
 function renderPage(num) {
     pageRendering = true;
     pdfDoc.getPage(num).then(function(page) {
@@ -55,20 +56,20 @@ document.getElementById('next').addEventListener('click', () => {
     queueRenderPage(pageNum);
 });
 
+
+// --- Main Content Loading ---
+
 function viewPdf(url, fileId, filename) {
     currentFileId = fileId;
 
-    // Update UI
     document.getElementById('main-content-title').textContent = filename;
     document.getElementById('myTab').style.display = 'flex';
 
-    // Reset content areas
     document.getElementById('summary-content').innerHTML = '<p>No summary generated yet.</p>';
     document.getElementById('dialogue-content').innerHTML = '<p>No dialogue generated yet.</p>';
     document.getElementById('figures-container').innerHTML = '<p>Loading figures...</p>';
     audioPlayer.src = '';
 
-    // Load PDF
     pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
         pdfDoc = pdfDoc_;
         document.getElementById('page_count').textContent = pdfDoc.numPages;
@@ -77,7 +78,6 @@ function viewPdf(url, fileId, filename) {
         document.getElementById('pagination-controls').style.display = 'block';
     });
 
-    // Fetch figures
     fetch(`/file_details/${fileId}`)
         .then(response => response.json())
         .then(data => {
@@ -108,7 +108,6 @@ function viewPdf(url, fileId, filename) {
             }
         });
 
-    // Fetch summary, dialogue, and audio
     updateFileContent(fileId);
 }
 
@@ -128,10 +127,11 @@ function updateFileContent(fileId) {
         });
 }
 
-
 function showLoading(element, message) {
     element.innerHTML = `<div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span><span>${message}</span></div>`;
 }
+
+// --- Content Generation Functions ---
 
 function summarizeFile(fileId) {
     showLoading(document.getElementById('summary-content'), 'Generating summary...');
@@ -144,7 +144,7 @@ function summarizeFile(fileId) {
                 updateFileContent(fileId);
                 const fileItem = document.getElementById(`file-item-${fileId}`);
                 if (fileItem) {
-                    const button = fileItem.querySelector('.file-actions button[onclick^="summarizeFile"]');
+                    const button = fileItem.querySelector('[data-action="summarizeFile"]');
                     button.textContent = 'Re-summarize';
                     button.classList.remove('btn-outline-secondary');
                     button.classList.add('btn-outline-success');
@@ -169,7 +169,7 @@ function generateDialogue(fileId) {
                 updateFileContent(fileId);
                 const fileItem = document.getElementById(`file-item-${fileId}`);
                 if (fileItem) {
-                    const button = fileItem.querySelector('.file-actions button[onclick^="generateDialogue"]');
+                    const button = fileItem.querySelector('[data-action="generateDialogue"]');
                     button.textContent = 'Re-generate';
                     button.classList.remove('btn-outline-primary');
                     button.classList.add('btn-outline-success');
@@ -183,7 +183,7 @@ function generateDialogue(fileId) {
         });
 }
 
-// --- File Management Functions ---
+// --- File & Folder Management ---
 
 function deleteFile(fileId) {
     if (!confirm('Are you sure you want to delete this file? This action cannot be undone.')) {
@@ -212,17 +212,21 @@ function renameFile(fileId, oldFilename) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                const fileItem = document.getElementById(`file-item-${fileId}`);
-                if (fileItem) {
-                    const link = fileItem.querySelector('a.nav-link');
-                    const span = link.querySelector('span');
-                    span.textContent = data.new_filename;
+                const fileItemElement = document.getElementById(`file-item-${fileId}`);
+                if (fileItemElement) {
+                    const span = fileItemElement.querySelector('span.file-filename');
+                    if (span) span.textContent = data.new_filename;
 
-                    // Use setAttribute to reconstruct the onclick handler safely
-                    link.setAttribute('onclick', `viewPdf('${data.new_url}', ${fileId}, ${JSON.stringify(data.new_filename)})`);
+                    const viewDiv = fileItemElement.querySelector('.file-item');
+                    if (viewDiv) {
+                        viewDiv.dataset.filename = JSON.stringify(data.new_filename);
+                        viewDiv.dataset.url = data.new_url;
+                    }
 
-                    const renameLink = fileItem.querySelector('a[onclick^="renameFile"]');
-                    renameLink.setAttribute('onclick', `renameFile(${fileId}, ${JSON.stringify(data.new_filename)})`);
+                    const renameButton = fileItemElement.querySelector('[data-action="renameFile"]');
+                    if (renameButton) {
+                        renameButton.dataset.filename = JSON.stringify(data.new_filename);
+                    }
                 }
             } else {
                 alert('Error renaming file: ' + data.error);
@@ -291,8 +295,10 @@ function renameFolder(folderId, oldName) {
                 const folderItem = document.getElementById(`folder-item-${folderId}`);
                 if (folderItem) {
                     folderItem.querySelector('strong').textContent = data.new_name;
-                    const renameLink = folderItem.querySelector('a[onclick^="renameFolder"]');
-                    renameLink.setAttribute('onclick', `renameFolder(${folderId}, ${JSON.stringify(data.new_name)})`);
+                    const renameButton = folderItem.querySelector('[data-action="renameFolder"]');
+                    if (renameButton) {
+                        renameButton.dataset.name = JSON.stringify(data.new_name);
+                    }
                 }
             } else {
                 alert('Error renaming folder: ' + data.error);
@@ -301,3 +307,46 @@ function renameFolder(folderId, oldName) {
         .catch(err => alert('An error occurred: ' + err.message));
     }
 }
+
+// --- Event Listeners ---
+
+document.addEventListener('DOMContentLoaded', () => {
+    const fileList = document.getElementById('file-list');
+
+    fileList.addEventListener('click', (event) => {
+        const fileItem = event.target.closest('.file-item');
+        const actionButton = event.target.closest('.file-action-button, .folder-action-button');
+
+        if (actionButton) {
+            event.preventDefault(); // Prevent default link behavior
+            const { action, id, filename, name } = actionButton.dataset;
+
+            switch (action) {
+                case 'renameFile':
+                    renameFile(id, JSON.parse(filename));
+                    break;
+                case 'moveFile':
+                    moveFile(id);
+                    break;
+                case 'deleteFile':
+                    deleteFile(id);
+                    break;
+                case 'summarizeFile':
+                    summarizeFile(id);
+                    break;
+                case 'generateDialogue':
+                    generateDialogue(id);
+                    break;
+                case 'renameFolder':
+                    renameFolder(id, JSON.parse(name));
+                    break;
+                case 'deleteFolder':
+                    deleteFolder(id);
+                    break;
+            }
+        } else if (fileItem) {
+            const { url, id, filename } = fileItem.dataset;
+            viewPdf(url, id, JSON.parse(filename));
+        }
+    });
+});
