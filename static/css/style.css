@@ -1,0 +1,28 @@
+body, html {
+    height: 100%;
+}
+.sidebar {
+    height: 100vh;
+    overflow-y: auto;
+}
+.main-content {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+#pdf-viewer {
+    flex-grow: 1;
+}
+.loading-spinner {
+    display: none; /* Hidden by default */
+}
+.content-box {
+    white-space: pre-wrap;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 1rem;
+    border-radius: .25rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
