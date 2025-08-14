@@ -1,6 +1,7 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
 let currentFileId = null;
+let activePollers = {};
 let pdfDoc = null;
 let pageNum = 1;
 let pageRendering = false;
@@ -155,15 +156,22 @@ function showNotification(title, body) {
 // --- Content Generation Functions ---
 
 function pollTaskStatus(taskUrl, fileId, type) {
+    // If a poller for this file already exists, clear it before starting a new one.
+    if (activePollers[fileId]) {
+        clearInterval(activePollers[fileId]);
+    }
+
     const interval = setInterval(() => {
         fetch(taskUrl)
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'complete') {
                     clearInterval(interval);
+                    delete activePollers[fileId];
+                    removePendingTask(fileId);
                     updateFileContent(fileId);
                     showNotification(`${type} Generation Complete`, `The ${type.toLowerCase()} for your file is ready.`);
-                     if (type === 'Summary') {
+                    if (type === 'Summary') {
                         const fileItem = document.getElementById(`file-item-${fileId}`);
                         if (fileItem) {
                             const button = fileItem.querySelector('[data-action="summarizeFile"]');
@@ -182,6 +190,8 @@ function pollTaskStatus(taskUrl, fileId, type) {
                     }
                 } else if (data.status === 'error') {
                     clearInterval(interval);
+                    delete activePollers[fileId];
+                    removePendingTask(fileId);
                     const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
                     contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
                     showNotification(`${type} Generation Failed`, `There was an error generating the ${type.toLowerCase()}.`);
@@ -190,10 +200,14 @@ function pollTaskStatus(taskUrl, fileId, type) {
             })
             .catch(err => {
                 clearInterval(interval);
-                 const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
-                 contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}</p>`;
+                delete activePollers[fileId];
+                // Don't remove from pending tasks, so it can be retried on reload
+                const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
+                contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}. Please reload the page to retry.</p>`;
             });
     }, 2000); // Poll every 2 seconds
+
+    activePollers[fileId] = interval;
 }
 
 
@@ -212,6 +226,7 @@ function summarizeFile(fileId) {
         })
         .then(data => {
             const taskUrl = `/summarize_status/${data.task_id}`;
+            savePendingTask(fileId, { taskUrl: taskUrl, type: 'Summary' });
             pollTaskStatus(taskUrl, fileId, 'Summary');
         })
         .catch(err => {
@@ -234,6 +249,7 @@ function generateDialogue(fileId) {
         })
         .then(data => {
             const taskUrl = `/dialogue_status/${data.task_id}`;
+            savePendingTask(fileId, { taskUrl: taskUrl, type: 'Dialogue' });
             pollTaskStatus(taskUrl, fileId, 'Dialogue');
         })
         .catch(err => {
@@ -368,7 +384,32 @@ function renameFolder(folderId, oldName) {
 
 // --- Event Listeners ---
 
+// --- Task Persistence ---
+function getPendingTasks() {
+    return JSON.parse(localStorage.getItem('pendingTasks') || '{}');
+}
+
+function savePendingTask(fileId, task) {
+    const tasks = getPendingTasks();
+    tasks[fileId] = task;
+    localStorage.setItem('pendingTasks', JSON.stringify(tasks));
+}
+
+function removePendingTask(fileId) {
+    const tasks = getPendingTasks();
+    delete tasks[fileId];
+    localStorage.setItem('pendingTasks', JSON.stringify(tasks));
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Resume polling for any pending tasks on page load
+    const pendingTasks = getPendingTasks();
+    for (const fileId in pendingTasks) {
+        const task = pendingTasks[fileId];
+        pollTaskStatus(task.taskUrl, fileId, task.type);
+    }
+
     const sidebar = document.getElementById('left-column');
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const fileList = document.getElementById('file-list');
