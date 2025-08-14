@@ -250,15 +250,9 @@ def generate_dialogue(file_id):
         {text[:4000]}
         ---
         """
-        response = text_model.generate_content(script_prompt)
-
-        json_response_text = response.text.strip()
-        if json_response_text.startswith('```json'):
-            json_response_text = json_response_text[7:]
-        if json_response_text.endswith('```'):
-            json_response_text = json_response_text[:-3]
-
-        dialogue = json.loads(json_response_text)
+        generation_config = {"response_mime_type": "application/json"}
+        response = text_model.generate_content(script_prompt, generation_config=generation_config)
+        dialogue = json.loads(response.text)
 
         # 2. Format the script for the TTS model
         tts_prompt = "TTS the following conversation between Host and Expert:\n"
