@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from google.genai import types
 import re
+from sqlalchemy.exc import SQLAlchemyError
 from database import db, init_db, Folder, PDFFile, Settings, get_settings
 from services import (
     init_gemini_client,
@@ -271,6 +272,8 @@ def delete_file(file_id):
 
     return {'success': True}
 
+from sqlalchemy.exc import SQLAlchemyError
+
 @app.route('/rename_file/<int:file_id>', methods=['POST'])
 def rename_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
@@ -278,30 +281,49 @@ def rename_file(file_id):
     if not new_filename:
         return {'error': 'New filename is required'}, 400
 
-    # Ensure the new filename has a .pdf extension
     if not new_filename.lower().endswith('.pdf'):
         new_filename += '.pdf'
 
-    # Rename the physical file
+    original_filename = pdf_file.filename
+    old_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+    new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+
+    if os.path.exists(new_path):
+        return {'error': 'A file with this name already exists'}, 400
+
+    # 1. Rename the physical file
     try:
-        old_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
-        new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
-
-        if os.path.exists(new_path):
-            return {'error': 'A file with this name already exists'}, 400
-
         os.rename(old_path, new_path)
         app.logger.info(f"Renamed {old_path} to {new_path}")
+    except OSError as e:
+        app.logger.error(f"Error renaming physical file for file_id {file_id}: {e}")
+        return {'error': 'Failed to rename file on disk'}, 500
 
-        # Update filename in the database
+    # 2. Try to update the filename in the database
+    try:
         pdf_file.filename = new_filename
         db.session.commit()
         app.logger.info(f"Renamed file_id {file_id} to {new_filename} in database.")
-
         return {'success': True, 'new_filename': new_filename}
-    except Exception as e:
-        app.logger.error(f"Error renaming file for file_id {file_id}: {e}")
-        return {'error': 'Error renaming file'}, 500
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f"Database error renaming file_id {file_id}, rolling back: {e}")
+
+        # 3. Attempt to roll back the physical file rename
+        try:
+            os.rename(new_path, old_path)
+            app.logger.info(f"Successfully rolled back file rename from {new_path} to {old_path}")
+        except OSError as rollback_e:
+            app.logger.critical(
+                f"CRITICAL: Failed to roll back file rename for file_id {file_id}. "
+                f"File is at {new_path} but DB has {original_filename}. Manual intervention required. "
+                f"Rollback error: {rollback_e}"
+            )
+            # This is a critical state. The file system and DB are out of sync.
+            # The error message to the user should reflect the DB error.
+            return {'error': 'A critical error occurred: Database update failed and filesystem rollback also failed. Please contact support.'}, 500
+
+        return {'error': 'Failed to update file record in the database. The file rename has been reverted.'}, 500
 
 @app.route('/move_file/<int:file_id>', methods=['POST'])
 def move_file(file_id):
