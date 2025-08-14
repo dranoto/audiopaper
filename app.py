@@ -206,7 +206,7 @@ def summarize_file(file_id):
         db.session.commit()
 
         # 4. Clean up the file from the server
-        # app.gemini_client.files.delete(name=uploaded_file.name)
+        app.gemini_client.files.delete(name=uploaded_file.name)
 
         return {'success': True, 'redirect_url': url_for('view_summary', file_id=file_id)}
 
