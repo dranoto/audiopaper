@@ -9,13 +9,15 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container-fluid">
+    <div id="app-container" class="container-fluid">
         <div class="row">
-            <nav id="left-column" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
-                <div class="position-sticky pt-3">
+            <nav id="left-column" class="col-md-3 col-lg-2 d-md-block sidebar">
+                <div class="position-sticky pt-3 d-flex flex-column h-100">
                     <div class="sidebar-header px-3 mb-3">
+                        <button class="btn btn-sm btn-ghost" id="sidebar-toggle" title="Toggle Sidebar">
+                            <i class="bi bi-layout-sidebar-inset-reverse"></i>
+                        </button>
                         <h1 class="h4">AudioPaper</h1>
-                        <span>Your AI Podcast Studio</span>
                     </div>
 
                     <div class="px-3 mb-3">
@@ -41,14 +43,15 @@
                         </form>
                     </div>
 
-                    <div id="file-list">
+                    <div id="file-list" class="flex-grow-1">
                         <ul class="nav flex-column" id="root-file-list">
                              {% for folder in folders %}
-                                <li class="nav-item" id="folder-item-{{ folder.id }}">
+                                <li class="nav-item folder-container" id="folder-item-{{ folder.id }}">
                                     <div class="d-flex justify-content-between align-items-center folder-item">
-                                        <a class="nav-link" href="#">
+                                        <a class="nav-link d-flex align-items-center" href="#">
+                                            <i class="bi bi-chevron-right me-2 folder-toggle"></i>
                                             <i class="bi bi-folder-fill me-2"></i>
-                                            <strong>{{ folder.name }}</strong>
+                                            <strong class="folder-name">{{ folder.name }}</strong>
                                         </a>
                                         <div class="dropdown">
                                             <button class="btn btn-sm btn-ghost" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -60,7 +63,7 @@
                                             </ul>
                                         </div>
                                     </div>
-                                    <ul class="nav flex-column ms-3" id="folder-list-{{ folder.id }}">
+                                    <ul class="nav flex-column ms-3 collapse" id="folder-list-{{ folder.id }}">
                                         {% for file in folder.files %}
                                         {% include 'file_item.html' %}
                                         {% endfor %}
@@ -74,17 +77,19 @@
                             {% endfor %}
                         </ul>
                     </div>
-                </div>
-            </nav>
 
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content d-flex flex-column">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 id="main-content-title" class="h2">Select a file to view</h1>
-                    <div class="btn-toolbar mb-2 mb-md-0">
-                        <a href="{{ url_for('settings') }}" class="btn btn-sm btn-outline-secondary">
+                    <div class="sidebar-footer mt-auto p-3">
+                         <a href="{{ url_for('settings') }}" class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-gear-fill me-2"></i>
                             Settings
                         </a>
                     </div>
+                </div>
+            </nav>
+
+            <main id="main-content" class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content d-flex flex-column">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 id="main-content-title" class="h2">Select a file to view</h1>
                 </div>
 
                 <!-- Tab navigation -->
