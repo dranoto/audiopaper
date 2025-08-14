@@ -96,7 +96,7 @@ def summarize_file(file_id):
         db.session.commit()
         app.logger.info(f"Summary saved for file_id {file_id}.")
 
-        return {'success': True, 'redirect_url': url_for('view_summary', file_id=file_id)}
+        return {'success': True}
 
     except Exception as e:
         app.logger.error(f"Error generating summary for file_id {file_id}: {e}")

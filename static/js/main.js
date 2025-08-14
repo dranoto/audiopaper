@@ -148,7 +148,7 @@ function summarizeFile(fileId) {
                     button.textContent = 'Re-summarize';
                     button.classList.remove('btn-outline-secondary');
                     button.classList.add('btn-outline-success');
-                }
+                }}
             } else {
                 document.getElementById('summary-content').innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
             }
