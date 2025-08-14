@@ -134,27 +134,85 @@ function showLoading(element, message) {
     element.innerHTML = `<div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span><span>${message}</span></div>`;
 }
 
+// --- Notifications ---
+function requestNotificationPermission() {
+    if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                showNotification('Success!', 'You will now be notified when tasks are complete.');
+            }
+        });
+    }
+}
+
+function showNotification(title, body) {
+    if (Notification.permission === 'granted') {
+        new Notification(title, { body: body });
+    }
+}
+
+
 // --- Content Generation Functions ---
 
+function pollTaskStatus(taskUrl, fileId, type) {
+    const interval = setInterval(() => {
+        fetch(taskUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'complete') {
+                    clearInterval(interval);
+                    updateFileContent(fileId);
+                    showNotification(`${type} Generation Complete`, `The ${type.toLowerCase()} for your file is ready.`);
+                     if (type === 'Summary') {
+                        const fileItem = document.getElementById(`file-item-${fileId}`);
+                        if (fileItem) {
+                            const button = fileItem.querySelector('[data-action="summarizeFile"]');
+                            button.textContent = 'Re-summarize';
+                            button.classList.remove('btn-outline-secondary');
+                            button.classList.add('btn-outline-success');
+                        }
+                    } else if (type === 'Dialogue') {
+                         const fileItem = document.getElementById(`file-item-${fileId}`);
+                        if (fileItem) {
+                            const button = fileItem.querySelector('[data-action="generateDialogue"]');
+                            button.textContent = 'Re-generate';
+                            button.classList.remove('btn-outline-primary');
+                            button.classList.add('btn-outline-success');
+                        }
+                    }
+                } else if (data.status === 'error') {
+                    clearInterval(interval);
+                    const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
+                    contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
+                    showNotification(`${type} Generation Failed`, `There was an error generating the ${type.toLowerCase()}.`);
+                }
+                // If 'processing', do nothing and wait for the next poll
+            })
+            .catch(err => {
+                clearInterval(interval);
+                 const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
+                 contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}</p>`;
+            });
+    }, 2000); // Poll every 2 seconds
+}
+
+
 function summarizeFile(fileId) {
-    showLoading(document.getElementById('summary-content'), 'Generating summary...');
+    showLoading(document.getElementById('summary-content'), 'Generating summary... This may take a moment.');
     new bootstrap.Tab(document.getElementById('summary-tab')).show();
+    requestNotificationPermission();
 
     fetch(`/summarize_file/${fileId}`, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                updateFileContent(fileId);
-                const fileItem = document.getElementById(`file-item-${fileId}`);
-                if (fileItem) {
-                    const button = fileItem.querySelector('[data-action="summarizeFile"]');
-                    button.textContent = 'Re-summarize';
-                    button.classList.remove('btn-outline-secondary');
-                    button.classList.add('btn-outline-success');
-                }
+        .then(response => {
+            if (response.status === 202) {
+                return response.json();
             } else {
-                document.getElementById('summary-content').innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
+                throw new Error('Failed to start summary generation.');
             }
+        })
+        .then(data => {
+            const taskUrl = `/summarize_status/${data.task_id}`;
+            pollTaskStatus(taskUrl, fileId, 'Summary');
         })
         .catch(err => {
             document.getElementById('summary-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
@@ -162,24 +220,21 @@ function summarizeFile(fileId) {
 }
 
 function generateDialogue(fileId) {
-    showLoading(document.getElementById('dialogue-content'), 'Generating dialogue and audio...');
+    showLoading(document.getElementById('dialogue-content'), 'Generating dialogue and audio... This may take a moment.');
     new bootstrap.Tab(document.getElementById('dialogue-tab')).show();
+    requestNotificationPermission();
 
     fetch(`/generate_dialogue/${fileId}`, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.audio_url) {
-                updateFileContent(fileId);
-                const fileItem = document.getElementById(`file-item-${fileId}`);
-                if (fileItem) {
-                    const button = fileItem.querySelector('[data-action="generateDialogue"]');
-                    button.textContent = 'Re-generate';
-                    button.classList.remove('btn-outline-primary');
-                    button.classList.add('btn-outline-success');
-                }
+         .then(response => {
+            if (response.status === 202) {
+                return response.json();
             } else {
-                document.getElementById('dialogue-content').innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
+                throw new Error('Failed to start dialogue generation.');
             }
+        })
+        .then(data => {
+            const taskUrl = `/dialogue_status/${data.task_id}`;
+            pollTaskStatus(taskUrl, fileId, 'Dialogue');
         })
         .catch(err => {
             document.getElementById('dialogue-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
@@ -314,13 +369,31 @@ function renameFolder(folderId, oldName) {
 // --- Event Listeners ---
 
 document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('left-column');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
     const fileList = document.getElementById('file-list');
+    const appContainer = document.getElementById('app-container');
+
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        appContainer.classList.toggle('sidebar-collapsed');
+    });
 
     fileList.addEventListener('click', (event) => {
+        const folderToggle = event.target.closest('.folder-toggle');
         const fileItem = event.target.closest('.file-item');
         const actionButton = event.target.closest('.file-action-button, .folder-action-button');
 
-        if (actionButton) {
+        if (folderToggle) {
+            event.preventDefault();
+            const folderContainer = folderToggle.closest('.folder-container');
+            const sublist = folderContainer.querySelector('.nav');
+            folderToggle.classList.toggle('collapsed');
+            new bootstrap.Collapse(sublist, {
+              toggle: true
+            });
+        }
+        else if (actionButton) {
             event.preventDefault(); // Prevent default link behavior
             const { action, id, filename, name } = actionButton.dataset;
 
