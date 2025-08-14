@@ -306,7 +306,7 @@ def rename_file(file_id):
         pdf_file.filename = new_filename
         if pdf_file.figures:
             figures_list = json.loads(pdf_file.figures)
-            updated_figures = [p.replace(old_fig_dir, new_fig_dir, 1) for p in figures_list]
+            updated_figures = [p.replace(f"static/figures/{old_fig_dir_basename}", f"static/figures/{new_fig_dir_basename}", 1) for p in figures_list]
             pdf_file.figures = json.dumps(updated_figures)
 
         db.session.commit()
