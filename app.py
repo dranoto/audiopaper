@@ -311,7 +311,7 @@ def generate_dialogue(file_id):
 
     except Exception as e:
         app.logger.error(f"Error generating dialogue for file_id {file_id}: {e}")
-        return {'error': str(e)}, 500
+        return {'error': 'An error occurred while generating the dialogue. Please check the logs for details.'}, 500
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
