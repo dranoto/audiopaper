@@ -7,6 +7,7 @@ import json
 import fitz # PyMuPDF
 from google import genai
 from google.generativeai import types
+import io
 import wave
 import pathlib
 from pydub import AudioSegment
