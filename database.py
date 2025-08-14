@@ -35,6 +35,12 @@ class Settings(db.Model):
     tts_host_voice = db.Column(db.String(100), nullable=False, default='Kore')
     tts_expert_voice = db.Column(db.String(100), nullable=False, default='Puck')
     summary_prompt = db.Column(db.Text, nullable=False, default='Summarize this research paper. Provide a concise overview of the introduction, methods, key findings, and conclusion.')
+    dialogue_prompt = db.Column(db.Text, nullable=False, default="""
+        Generate a podcast-style dialogue script based on the attached document.
+        The script should be a conversation between a 'Host' and an 'Expert'.
+        The Host should ask engaging questions, and the Expert should explain the key concepts from the document clearly.
+        Start each line with the speaker's name followed by a colon (e.g., "Host: ...").
+        """)
 
     def __repr__(self):
         return f'<Settings {self.id}>'
