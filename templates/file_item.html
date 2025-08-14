@@ -2,7 +2,7 @@
     <div class="d-flex justify-content-between align-items-center file-item" 
          data-url="{{ url_for('uploaded_file', filename=file.filename) }}"
          data-id="{{ file.id }}"
-         data-filename="{{ file.filename|tojson }}" 
+         data-filename="{{ file.filename }}" 
          style="cursor: pointer;">
         
         <a class="nav-link" href="#">
@@ -14,7 +14,7 @@
                 <i class="bi bi-three-dots-vertical"></i>
             </button>
             <ul class="dropdown-menu">
-                <li><a class="dropdown-item file-action-button" href="#" data-action="renameFile" data-id="{{ file.id }}" data-filename="{{ file.filename|tojson }}"><i class="bi bi-pencil-fill me-2"></i>Rename</a></li>
+                <li><a class="dropdown-item file-action-button" href="#" data-action="renameFile" data-id="{{ file.id }}" data-filename="{{ file.filename }}"><i class="bi bi-pencil-fill me-2"></i>Rename</a></li>
                 <li><a class="dropdown-item file-action-button" href="#" data-action="moveFile" data-id="{{ file.id }}"><i class="bi bi-folder-symlink-fill me-2"></i>Move</a></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item text-danger file-action-button" href="#" data-action="deleteFile" data-id="{{ file.id }}"><i class="bi bi-trash-fill me-2"></i>Delete</a></li>
