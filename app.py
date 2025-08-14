@@ -5,9 +5,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 import json
 import fitz # PyMuPDF
-import google.generativeai as genai
+import google.api_core.exceptions
+from google import genai
 import wave
-from google.genai import types
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
