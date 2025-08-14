@@ -330,7 +330,7 @@ def generate_dialogue(file_id):
 
 
 @app.route('/settings', methods=['GET', 'POST'])
-def settings_route():
+def settings():
     settings = get_settings()
     if request.method == 'POST':
         settings.gemini_api_key = request.form.get('gemini_api_key')
@@ -342,7 +342,7 @@ def settings_route():
         settings.summary_prompt = request.form.get('summary_prompt')
         db.session.commit()
         init_gemini_client(app)
-        return redirect(url_for('settings_route'))
+        return redirect(url_for('settings'))
 
     return render_template('settings.html', 
                            settings=settings,
