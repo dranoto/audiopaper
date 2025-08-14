@@ -31,7 +31,7 @@
             {% if file.summary %}
                 <div class="content-box">{{ file.summary }}</div>
             {% else %}
-                <button id="summarize-btn" class="btn btn-success" onclick="summarizeFileWithFeedback({{ file.id }})">
+                <button id="summarize-btn" class="btn btn-success" onclick="summarizeFile({{ file.id }}, 'summarize-btn', 'summary-error')">
                     <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
                     Generate Summary
                 </button>
@@ -55,7 +55,7 @@
                 <h5>Transcript</h5>
                 <div class="content-box">{{ file.dialogue_transcript }}</div>
             {% else %}
-                <button id="dialogue-btn" class="btn btn-info" onclick="generateDialogueWithFeedback({{ file.id }})">
+                <button id="dialogue-btn" class="btn btn-info" onclick="generateDialogue({{ file.id }}, 'dialogue-btn', 'dialogue-error')">
                     <span class="spinner-border spinner-border-sm loading-spinner" role="status" aria-hidden="true"></span>
                     Generate Dialogue
                 </button>

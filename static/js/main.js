@@ -102,77 +102,43 @@ function viewPdf(url, fileId) {
         });
 }
 
-function summarizeFile(fileId) {
-    alert('Generating summary... this may take a moment. You will be redirected when it is complete.');
-
-    fetch(`/summarize_file/${fileId}`, {
-        method: 'POST',
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.href = data.redirect_url;
-        } else {
-            alert('Error generating summary: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An unexpected error occurred. Check the console for details.');
-    });
-}
-
-function generateDialogue(fileId) {
-    const audioPlayer = document.getElementById('audio-player');
-
-    alert('Generating dialogue... this may take a moment.');
-
-    fetch(`/generate_dialogue/${fileId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.audio_url) {
-                audioPlayer.src = data.audio_url;
-                audioPlayer.load();
-                audioPlayer.play();
-                alert('Dialogue generated and is now playing.');
-            } else {
-                alert('Error generating dialogue: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An unexpected error occurred. Check the console for details.');
-        });
-}
-
 function toggleLoading(buttonId, isLoading) {
+    if (!buttonId) return;
     const button = document.getElementById(buttonId);
     if (!button) return;
     const spinner = button.querySelector('.loading-spinner');
     button.disabled = isLoading;
-    spinner.style.display = isLoading ? 'inline-block' : 'none';
+    if (spinner) {
+        spinner.style.display = isLoading ? 'inline-block' : 'none';
+    }
 }
 
-function handleError(divId, error) {
-    const errorDiv = document.getElementById(divId);
-    errorDiv.textContent = 'An error occurred: ' + error;
-    errorDiv.style.display = 'block';
+function handleError(errorId, error) {
+    if (!errorId) {
+        alert('An error occurred: ' + error);
+        console.error('Error:', error);
+        return;
+    }
+    const errorDiv = document.getElementById(errorId);
+    if (errorDiv) {
+        errorDiv.textContent = 'An error occurred: ' + error;
+        errorDiv.style.display = 'block';
+    }
 }
 
-function summarizeFileWithFeedback(fileId) {
-    toggleLoading('summarize-btn', true);
-    const errorDiv = document.getElementById('summary-error');
-    errorDiv.style.display = 'none';
+function summarizeFile(fileId, buttonId, errorId) {
+    if (!buttonId) {
+        alert('Generating summary... this may take a moment. You will be redirected when it is complete.');
+    }
+    toggleLoading(buttonId, true);
+    if (errorId) {
+        const errorDiv = document.getElementById(errorId);
+        if (errorDiv) errorDiv.style.display = 'none';
+    }
 
     fetch(`/summarize_file/${fileId}`, { method: 'POST' })
         .then(response => {
             if (!response.ok) {
-                // Try to get error from JSON body, otherwise use status text
                 return response.json().then(errData => {
                     throw new Error(errData.error || response.statusText);
                 }).catch(() => {
@@ -189,15 +155,21 @@ function summarizeFileWithFeedback(fileId) {
             }
         })
         .catch(err => {
-            handleError('summary-error', err.message);
+            handleError(errorId, err.message);
         })
-        .finally(() => toggleLoading('summarize-btn', false));
+        .finally(() => toggleLoading(buttonId, false));
 }
 
-function generateDialogueWithFeedback(fileId) {
-    toggleLoading('dialogue-btn', true);
-    const errorDiv = document.getElementById('dialogue-error');
-    errorDiv.style.display = 'none';
+function generateDialogue(fileId, buttonId, errorId) {
+    if (!buttonId) {
+        alert('Generating dialogue... this may take a moment.');
+    }
+    toggleLoading(buttonId, true);
+    if (errorId) {
+        const errorDiv = document.getElementById(errorId);
+        if (errorDiv) errorDiv.style.display = 'none';
+    }
+    const audioPlayer = document.getElementById('audio-player');
 
     fetch(`/generate_dialogue/${fileId}`, { method: 'POST' })
         .then(response => {
@@ -212,13 +184,20 @@ function generateDialogueWithFeedback(fileId) {
         })
         .then(data => {
             if (data.audio_url) {
-                window.location.reload();
+                if (buttonId) {
+                    window.location.reload();
+                } else {
+                    audioPlayer.src = data.audio_url;
+                    audioPlayer.load();
+                    audioPlayer.play();
+                    alert('Dialogue generated and is now playing.');
+                }
             } else {
                 throw new Error(data.error || 'An unknown error occurred during dialogue generation.');
             }
         })
         .catch(err => {
-            handleError('dialogue-error', err.message);
+            handleError(errorId, err.message);
         })
-        .finally(() => toggleLoading('dialogue-btn', false));
+        .finally(() => toggleLoading(buttonId, false));
 }
