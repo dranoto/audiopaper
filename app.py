@@ -1,17 +1,18 @@
 import os
+import json
+import fitz  # PyMuPDF
+from google import genai
+from google.genai import types
+import io
+import re
+import pathlib
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
-import json
-import fitz # PyMuPDF
-from google import genai
-from google.genai import types
-import io
-import wave
-import pathlib
 from pydub import AudioSegment
 
+# --- App and DB Setup ---
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['GENERATED_AUDIO_FOLDER'] = 'generated_audio'
@@ -21,6 +22,7 @@ ALLOWED_EXTENSIONS = {'pdf'}
 
 db = SQLAlchemy(app)
 
+# --- Database Models ---
 class Folder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -46,66 +48,74 @@ class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     lock = db.Column(db.String(10), unique=True, default='main_settings', nullable=False)
     gemini_api_key = db.Column(db.String(200), nullable=True)
-    summary_model = db.Column(db.String(100), nullable=False, default='gemini-pro')
-    dialogue_model = db.Column(db.String(100), nullable=False, default='gemini-pro')
+    summary_model = db.Column(db.String(100), nullable=False, default='gemini-1.5-pro-latest')
+    dialogue_model = db.Column(db.String(100), nullable=False, default='gemini-1.5-pro-latest')
+    tts_model = db.Column(db.String(100), nullable=False, default='gemini-2.5-flash-preview-tts')
     tts_host_voice = db.Column(db.String(100), nullable=False, default='Kore')
     tts_expert_voice = db.Column(db.String(100), nullable=False, default='Puck')
-    summary_prompt = db.Column(db.Text, nullable=True, default='Summarize this document as a list of the most important takeaways.')
+    summary_prompt = db.Column(db.Text, nullable=False, default='Summarize this research paper. Provide a concise overview of the introduction, methods, key findings, and conclusion. The summary should be clear and accessible to someone familiar with the general field.')
 
     def __repr__(self):
         return f'<Settings {self.id}>'
 
+# --- Initial Setup ---
 with app.app_context():
     db.create_all()
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
 
+# --- Helper Functions ---
 def get_settings():
+    """Gets settings from DB, creating them if they don't exist."""
     settings = Settings.query.first()
     if settings:
         return settings
-
-    # To prevent race conditions in a multi-process environment like gunicorn,
-    # we'll try to create the settings row, but expect that it might fail
-    # if another process created it first.
     try:
         settings = Settings()
         db.session.add(settings)
         db.session.commit()
         return settings
     except IntegrityError:
-        # The row was likely created by another process in the meantime.
         db.session.rollback()
         return Settings.query.first()
 
+def init_gemini_client(app_instance):
+    """Initializes the Gemini Client and attaches it to the app instance."""
+    with app_instance.app_context():
+        settings = get_settings()
+        api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
+        if api_key:
+            try:
+                app_instance.gemini_client = genai.Client(api_key=api_key)
+                app_instance.logger.info("Gemini Client initialized successfully.")
+            except Exception as e:
+                app_instance.gemini_client = None
+                app_instance.logger.error(f"Failed to initialize Gemini Client: {e}")
+        else:
+            app_instance.gemini_client = None
+            app_instance.logger.warning("Gemini API key not found. Generative features will be disabled.")
 
 def process_pdf(filepath):
+    """Extracts text, figures, and captions from a PDF file."""
     doc = fitz.open(filepath)
     text = ""
     figures = []
     captions = []
-
     figure_dir = os.path.join('static', 'figures', os.path.basename(filepath).replace('.pdf', ''))
     os.makedirs(figure_dir, exist_ok=True)
 
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
         text += page.get_text()
-
-        # Get text blocks for caption finding
         text_blocks = page.get_text("blocks")
-
-        # Extract images
         image_list = page.get_images(full=True)
+
         for img_index, img in enumerate(image_list):
             xref = img[0]
-
-            # Get image bounding box
             try:
                 img_bbox = page.get_image_bbox(img)
             except ValueError:
-                # Skip if bbox not found
                 continue
 
             base_image = doc.extract_image(xref)
@@ -118,30 +128,22 @@ def process_pdf(filepath):
                 f.write(image_bytes)
             figures.append(image_path)
 
-            # Find caption for the image
             found_caption = ""
             for tb in text_blocks:
                 text_bbox = fitz.Rect(tb[:4])
-                block_text = tb[4]
-
-                # Check if text block is below the image and close to it
                 if text_bbox.y0 > img_bbox.y1 and (text_bbox.y0 - img_bbox.y1) < 50:
-                    # Check for horizontal alignment
                     text_center_x = (text_bbox.x0 + text_bbox.x1) / 2
-                    if img_bbox.x0 < text_center_x < img_bbox.x1:
-                        if block_text.strip().lower().startswith(('figure', 'fig.')):
-                            found_caption = block_text.strip().replace('\n', ' ')
-                            break
-
+                    if img_bbox.x0 < text_center_x < img_bbox.x1 and tb[4].strip().lower().startswith(('figure', 'fig.')):
+                        found_caption = tb[4].strip().replace('\n', ' ')
+                        break
             captions.append(found_caption if found_caption else f"Figure {len(figures)}")
 
     return text, json.dumps(figures), json.dumps(captions)
 
-
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# --- Flask Routes ---
 @app.route('/')
 def index():
     folders = Folder.query.all()
@@ -162,24 +164,22 @@ def upload_file():
     if 'file' not in request.files:
         return redirect(request.url)
     file = request.files['file']
-    folder_id = request.form.get('folder_id') # get folder_id from form
-    if file.filename == '':
+    folder_id = request.form.get('folder_id')
+    if file.filename == '' or not allowed_file(file.filename):
         return redirect(request.url)
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
 
-        # Process the PDF and save to database
-        text, figures, captions = process_pdf(filepath)
-        new_file = PDFFile(filename=filename, text=text, figures=figures, captions=captions)
-        if folder_id:
-            new_file.folder_id = folder_id
-        db.session.add(new_file)
-        db.session.commit()
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
 
-        return redirect(url_for('index'))
-    return redirect(request.url)
+    text, figures, captions = process_pdf(filepath)
+    new_file = PDFFile(filename=filename, text=text, figures=figures, captions=captions)
+    if folder_id:
+        new_file.folder_id = folder_id
+    db.session.add(new_file)
+    db.session.commit()
+
+    return redirect(url_for('index'))
 
 @app.route('/summarize_file/<int:file_id>', methods=['POST'])
 def summarize_file(file_id):
@@ -187,33 +187,33 @@ def summarize_file(file_id):
     settings = get_settings()
 
     if not app.gemini_client:
-        return {'error': 'Gemini client is not initialized. Please check the API key.'}, 500
+        return {'error': 'Gemini client is not initialized. Please check the API key in settings.'}, 500
 
+    uploaded_file = None
     try:
-        # 1. Upload the file to the File API
         filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
+        app.logger.info(f"Uploading {filepath} to Gemini File API...")
         uploaded_file = app.gemini_client.files.upload(file=filepath)
 
-        # 2. Generate the summary
-        prompt = settings.summary_prompt or "Summarize this document."
-        response = app.gemini_client.models.generate_content(
-            model=settings.summary_model,
-            contents=[uploaded_file, prompt]
-        )
-        summary = response.text
-
-        # 3. Save the summary to the database
-        pdf_file.summary = summary
+        prompt = settings.summary_prompt
+        model = app.gemini_client.models.get(settings.summary_model)
+        
+        app.logger.info(f"Generating summary with model {settings.summary_model}...")
+        response = model.generate_content([uploaded_file, prompt])
+        
+        pdf_file.summary = response.text
         db.session.commit()
-
-        # 4. Clean up the file from the server
-        app.gemini_client.files.delete(name=uploaded_file.name)
+        app.logger.info(f"Summary saved for file_id {file_id}.")
 
         return {'success': True, 'redirect_url': url_for('view_summary', file_id=file_id)}
 
     except Exception as e:
         app.logger.error(f"Error generating summary for file_id {file_id}: {e}")
-        return {'error': f'An error occurred while generating the summary. {e}'}, 500
+        return {'error': f'An error occurred: {e}'}, 500
+    finally:
+        if uploaded_file:
+            app.logger.info(f"Deleting uploaded file {uploaded_file.name} from Gemini server.")
+            app.gemini_client.files.delete(name=uploaded_file.name)
 
 
 @app.route('/summary/<int:file_id>')
@@ -221,6 +221,104 @@ def view_summary(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     return render_template('summary.html', file=pdf_file)
 
+@app.route('/generate_dialogue/<int:file_id>')
+def generate_dialogue(file_id):
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    settings = get_settings()
+
+    if not app.gemini_client:
+        return {'error': 'Gemini client is not initialized. Please check API key.'}, 500
+
+    try:
+        # 1. Generate dialogue script
+        script_prompt = f"""
+        Based on the following summary, generate a dialogue script for a podcast episode between a 'Host' and an 'Expert'.
+        The dialogue should be engaging and informative. The Host should ask questions and the Expert should explain the concepts.
+        Format the output as a valid JSON array of objects, where each object has a 'speaker' ('Host' or 'Expert') and a 'line'.
+
+        Here is the summary:
+        ---
+        {pdf_file.summary or pdf_file.text[:8000]}
+        ---
+        """
+        model = app.gemini_client.models.get(settings.dialogue_model)
+        response = model.generate_content(
+            script_prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        cleaned_json = re.sub(r'```json\n?|```', '', response.text.strip())
+        dialogue = json.loads(cleaned_json)
+
+        pdf_file.dialogue_transcript = json.dumps(dialogue, indent=2)
+        db.session.commit()
+
+        # 2. Format script for TTS and generate audio
+        tts_prompt = "TTS the following conversation between Host and Expert:\n"
+        for part in dialogue:
+            tts_prompt += f"{part.get('speaker', 'Expert')}: {part.get('line', '')}\n"
+
+        tts_model = app.gemini_client.models.get(settings.tts_model)
+        
+        generation_config = types.GenerateContentConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(
+                multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+                    speaker_voice_configs=[
+                        types.SpeakerVoiceConfig(
+                            speaker='Host',
+                            voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_host_voice))
+                        ),
+                        types.SpeakerVoiceConfig(
+                            speaker='Expert',
+                            voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_expert_voice))
+                        ),
+                    ]
+                )
+            )
+        )
+        
+        tts_response = tts_model.generate_content(tts_prompt, generation_config=generation_config)
+        
+        # 3. Process and save audio
+        audio_part = tts_response.candidates[0].content.parts[0]
+        audio_data = audio_part.inline_data.data
+        mime_type = audio_part.inline_data.mime_type
+        
+        match = re.search(r'rate=(\d+)', mime_type)
+        sample_rate = int(match.group(1)) if match else 24000
+
+        audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=sample_rate, channels=1)
+        
+        mp3_filename = f"dialogue_{file_id}.mp3"
+        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+        audio.export(mp3_filepath, format="mp3")
+
+        audio_url = url_for('generated_audio', filename=mp3_filename)
+        return {'audio_url': audio_url, 'transcript': pdf_file.dialogue_transcript}
+
+    except Exception as e:
+        app.logger.error(f"Error generating dialogue for file_id {file_id}: {e}")
+        return {'error': f'An error occurred: {e}'}, 500
+
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings_route():
+    settings = get_settings()
+    if request.method == 'POST':
+        settings.gemini_api_key = request.form.get('gemini_api_key')
+        settings.summary_model = request.form.get('summary_model')
+        settings.dialogue_model = request.form.get('dialogue_model')
+        settings.tts_model = request.form.get('tts_model')
+        settings.tts_host_voice = request.form.get('tts_host_voice')
+        settings.tts_expert_voice = request.form.get('tts_expert_voice')
+        settings.summary_prompt = request.form.get('summary_prompt')
+        db.session.commit()
+        init_gemini_client(app) # Re-initialize client with new key if provided
+        return redirect(url_for('settings_route'))
+
+    return render_template('settings.html', settings=settings)
+
+# --- Static File Routes ---
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
@@ -231,134 +329,16 @@ def file_details(file_id):
     return {
         'id': pdf_file.id,
         'filename': pdf_file.filename,
-        'figures': json.loads(pdf_file.figures),
-        'captions': json.loads(pdf_file.captions)
+        'figures': json.loads(pdf_file.figures or '[]'),
+        'captions': json.loads(pdf_file.captions or '[]')
     }
 
 @app.route('/generated_audio/<filename>')
 def generated_audio(filename):
     return send_from_directory(app.config['GENERATED_AUDIO_FOLDER'], filename)
 
-@app.route('/generate_dialogue/<int:file_id>')
-def generate_dialogue(file_id):
-    pdf_file = PDFFile.query.get_or_404(file_id)
-    settings = get_settings()
-
-    if not app.gemini_client:
-        return {'error': 'Gemini client is not initialized. Please check the API key.'}, 500
-
-    try:
-        # 1. Generate dialogue script
-        script_prompt = f"""
-        Based on the following text, generate a dialogue script for a podcast episode between a 'Host' and an 'Expert'.
-        The dialogue should be engaging and informative, summarizing the key points of the text.
-        Format the output as a JSON array of objects, where each object has a 'speaker' ('Host' or 'Expert') and a 'line' (the text to be spoken).
-        Ensure the JSON is well-formed.
-
-        Here is the text:
-        ---
-        {pdf_file.text[:4000]}
-        ---
-        """
-        generation_config = {"response_mime_type": "application/json"}
-        response = app.gemini_client.models.generate_content(
-            model=settings.dialogue_model,
-            contents=[script_prompt],
-            generation_config=generation_config
-        )
-        dialogue = json.loads(response.text)
-
-        # Save the transcript
-        pdf_file.dialogue_transcript = json.dumps(dialogue, indent=2)
-        db.session.commit()
-
-        # 2. Format the script for the TTS model
-        tts_prompt = "TTS the following conversation between Host and Expert:\n"
-        for part in dialogue:
-            speaker = part.get('speaker', 'Expert')
-            line = part.get('line', '')
-            if line:
-                tts_prompt += f"{speaker}: {line}\n"
-
-        # 3. Generate multi-speaker TTS audio
-        tts_response = app.gemini_client.models.generate_content(
-           model="gemini-2.5-flash-preview-tts",
-           contents=[tts_prompt],
-           generation_config=types.GenerateContentConfig(
-              response_modalities=["AUDIO"],
-              speech_config=types.SpeechConfig(
-                 multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
-                    speaker_voice_configs=[
-                       types.SpeakerVoiceConfig(
-                          speaker='Host',
-                          voice_config=types.VoiceConfig(
-                             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                voice_name=settings.tts_host_voice,
-                             )
-                          )
-                       ),
-                       types.SpeakerVoiceConfig(
-                          speaker='Expert',
-                          voice_config=types.VoiceConfig(
-                             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                voice_name=settings.tts_expert_voice,
-                             )
-                          )
-                       ),
-                    ]
-                 )
-              )
-           )
-        )
-        audio_data = tts_response.candidates[0].content.parts[0].inline_data.data
-
-        # 4. Save the audio file as MP3
-        mp3_filename = f"dialogue_{file_id}.mp3"
-        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
-
-        # Convert WAV data (in memory) to MP3
-        audio = AudioSegment.from_wav(io.BytesIO(audio_data))
-        audio.export(mp3_filepath, format="mp3")
-
-        # 5. Return URL to the audio file
-        audio_url = url_for('generated_audio', filename=mp3_filename)
-        return {'audio_url': audio_url}
-
-    except Exception as e:
-        app.logger.error(f"Error generating dialogue for file_id {file_id}: {e}")
-        return {'error': 'An error occurred while generating the dialogue. Please check the logs for details.'}, 500
-
-@app.route('/settings', methods=['GET', 'POST'])
-def settings():
-    settings = get_settings()
-    if request.method == 'POST':
-        settings.gemini_api_key = request.form.get('gemini_api_key')
-        settings.summary_model = request.form.get('summary_model')
-        settings.dialogue_model = request.form.get('dialogue_model')
-        settings.tts_host_voice = request.form.get('tts_host_voice')
-        settings.tts_expert_voice = request.form.get('tts_expert_voice')
-        settings.summary_prompt = request.form.get('summary_prompt')
-        db.session.commit()
-        # Re-initialize the client if the API key changed.
-        init_gemini_client(app)
-        return redirect(url_for('settings'))
-
-    return render_template('settings.html', settings=settings)
-
-def init_gemini_client(app_instance):
-    with app_instance.app_context():
-        settings = get_settings()
-        api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
-        if api_key:
-            try:
-                client = genai.Client(api_key=api_key)
-                app_instance.gemini_client = client
-                app_instance.logger.info("Gemini Client initialized successfully.")
-            except Exception as e:
-                app_instance.logger.error(f"Failed to initialize Gemini Client: {e}")
-                app_instance.gemini_client = None
-        else:
-            app_instance.logger.warning("Gemini API key not found. Generative features will be disabled.")
-            app_instance.gemini_client = None
-
+# --- App Initialization ---
 init_gemini_client(app)
+
+if __name__ == '__main__':
+    app.run(debug=True)
