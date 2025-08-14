@@ -1,11 +1,12 @@
 import os
 import json
 import pathlib
+import re
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from google.genai import types
-import re
+from sqlalchemy.exc import SQLAlchemyError
 from database import db, init_db, Folder, PDFFile, Settings, get_settings
 from services import (
     init_gemini_client,
@@ -243,29 +244,28 @@ def generated_audio(filename):
 def delete_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
 
-    # Delete the physical files
-    try:
-        # Delete PDF file
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
-        if os.path.exists(pdf_path):
-            os.remove(pdf_path)
-            app.logger.info(f"Deleted PDF file: {pdf_path}")
+    # Store file paths before deleting the database record
+    pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
+    mp3_filename = f"dialogue_{file_id}.mp3"
+    mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
 
-        # Delete generated audio file
-        mp3_filename = f"dialogue_{file_id}.mp3"
-        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
-        if os.path.exists(mp3_filepath):
-            os.remove(mp3_filepath)
-            app.logger.info(f"Deleted audio file: {mp3_filepath}")
-
-    except Exception as e:
-        app.logger.error(f"Error deleting physical files for file_id {file_id}: {e}")
-        return {'error': 'Error deleting physical files'}, 500
-
-    # Delete from database
+    # Delete from database first
     db.session.delete(pdf_file)
     db.session.commit()
     app.logger.info(f"Deleted file_id {file_id} from database.")
+
+    # Then, delete the physical files
+    try:
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+            app.logger.info(f"Deleted PDF file: {pdf_path}")
+        if os.path.exists(mp3_filepath):
+            os.remove(mp3_filepath)
+            app.logger.info(f"Deleted audio file: {mp3_filepath}")
+    except Exception as e:
+        # Log the error, but don't return an error response to the client
+        # because the database record is already gone.
+        app.logger.error(f"Error deleting physical files for what was file_id {file_id}: {e}")
 
     return {'success': True}
 
@@ -276,45 +276,58 @@ def rename_file(file_id):
     if not new_filename:
         return {'error': 'New filename is required'}, 400
 
-    # Ensure the new filename has a .pdf extension
     if not new_filename.lower().endswith('.pdf'):
         new_filename += '.pdf'
 
-    # Rename the physical file
+    original_filename = pdf_file.filename
+    old_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+    new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+
+    if os.path.exists(new_path):
+        return {'error': 'A file with this name already exists'}, 400
+
+    # 1. Rename the physical file
     try:
-        old_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
-        new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
-
-        if os.path.exists(new_path):
-            return {'error': 'A file with this name already exists'}, 400
-
         os.rename(old_path, new_path)
         app.logger.info(f"Renamed {old_path} to {new_path}")
+    except OSError as e:
+        app.logger.error(f"Error renaming physical file for file_id {file_id}: {e}")
+        return {'error': 'Failed to rename file on disk'}, 500
 
-        # Update filename in the database
+    # 2. Try to update the filename in the database
+    try:
         pdf_file.filename = new_filename
         db.session.commit()
         app.logger.info(f"Renamed file_id {file_id} to {new_filename} in database.")
-
         return {'success': True, 'new_filename': new_filename}
-    except Exception as e:
-        app.logger.error(f"Error renaming file for file_id {file_id}: {e}")
-        return {'error': 'Error renaming file'}, 500
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f"Database error renaming file_id {file_id}, rolling back: {e}")
+
+        # 3. Attempt to roll back the physical file rename
+        try:
+            os.rename(new_path, old_path)
+            app.logger.info(f"Successfully rolled back file rename from {new_path} to {old_path}")
+        except OSError as rollback_e:
+            app.logger.critical(
+                f"CRITICAL: Failed to roll back file rename for file_id {file_id}. "
+                f"File is at {new_path} but DB has {original_filename}. Manual intervention required. "
+                f"Rollback error: {rollback_e}"
+            )
+            return {'error': 'A critical error occurred: Database update failed and filesystem rollback also failed. Please contact support.'}, 500
+
+        return {'error': 'Failed to update file record in the database. The file rename has been reverted.'}, 500
 
 @app.route('/move_file/<int:file_id>', methods=['POST'])
 def move_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     new_folder_id = request.json.get('new_folder_id')
 
-    # Allow moving to root (no folder)
     if new_folder_id == 'root':
         pdf_file.folder_id = None
     else:
-        try:
-            target_folder = Folder.query.get_or_404(int(new_folder_id))
-            pdf_file.folder_id = target_folder.id
-        except (ValueError, TypeError):
-            return {'error': 'Invalid folder ID provided.'}, 400
+        target_folder = Folder.query.get_or_404(new_folder_id)
+        pdf_file.folder_id = target_folder.id
 
     db.session.commit()
     app.logger.info(f"Moved file_id {file_id} to folder_id {new_folder_id}.")
@@ -324,10 +337,6 @@ def move_file(file_id):
 def delete_folder(folder_id):
     folder = Folder.query.get_or_404(folder_id)
 
-    # Note: This will cascade delete PDF files within the folder due to DB relationship
-    # and their physical files will be handled if the relationship is configured with cascade delete hooks.
-    # For now, we assume we only delete empty folders or the user knows the files will be deleted.
-    # A safer implementation would be to check if the folder is empty first.
     if folder.files:
         return {'error': 'Cannot delete a folder that is not empty.'}, 400
 
