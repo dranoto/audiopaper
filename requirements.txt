@@ -4,5 +4,5 @@ pytest-flask
 PyMuPDF
 Flask-SQLAlchemy
 SQLAlchemy
-google-generativeai
+google-genai
 gunicorn
