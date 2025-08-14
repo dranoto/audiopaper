@@ -233,9 +233,10 @@ def _run_dialogue_generation(app, task_id, file_id):
             db.session.rollback()
             app.logger.error(f"Task {task_id}: Error generating dialogue for file_id {file_id}: {e}")
             task = Task.query.get(task_id)
-            task.status = 'error'
-            task.result = json.dumps({'error': str(e)})
-            db.session.commit()
+            if task:
+                task.status = 'error'
+                task.result = json.dumps({'error': str(e)})
+                db.session.commit()
         finally:
             if 'uploaded_file' in locals() and uploaded_file:
                 app.logger.info(f"Task {task_id}: Deleting uploaded file {uploaded_file.name}.")
