@@ -25,15 +25,27 @@
                             <h3>Model Selection</h3>
                             <div class="mb-3">
                                 <label for="summary_model" class="form-label">Summary Model</label>
-                                <input type="text" class="form-control" id="summary_model" name="summary_model" value="{{ settings.summary_model }}">
+                                <select class="form-select" id="summary_model" name="summary_model">
+                                    {% for model in text_models %}
+                                        <option value="{{ model }}" {% if model == settings.summary_model %}selected{% endif %}>{{ model }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label for="dialogue_model" class="form-label">Dialogue Generation Model</label>
-                                <input type="text" class="form-control" id="dialogue_model" name="dialogue_model" value="{{ settings.dialogue_model }}">
+                                <select class="form-select" id="dialogue_model" name="dialogue_model">
+                                    {% for model in text_models %}
+                                        <option value="{{ model }}" {% if model == settings.dialogue_model %}selected{% endif %}>{{ model }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                              <div class="mb-3">
                                 <label for="tts_model" class="form-label">Text-to-Speech Model</label>
-                                <input type="text" class="form-control" id="tts_model" name="tts_model" value="{{ settings.tts_model }}">
+                                <select class="form-select" id="tts_model" name="tts_model">
+                                    {% for model in tts_models %}
+                                        <option value="{{ model }}" {% if model == settings.tts_model %}selected{% endif %}>{{ model }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label for="summary_prompt" class="form-label">Summary Prompt</label>
@@ -43,13 +55,19 @@
                             <h3>Text-to-Speech Voices</h3>
                             <div class="mb-3">
                                 <label for="tts_host_voice" class="form-label">Host Voice</label>
-                                <input type="text" class="form-control" id="tts_host_voice" name="tts_host_voice" value="{{ settings.tts_host_voice }}">
-                                <div class="form-text">e.g., Kore, Puck, etc.</div>
+                                <select class="form-select" id="tts_host_voice" name="tts_host_voice">
+                                    {% for voice in voices %}
+                                        <option value="{{ voice }}" {% if voice == settings.tts_host_voice %}selected{% endif %}>{{ voice }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label for="tts_expert_voice" class="form-label">Expert Voice</label>
-                                <input type="text" class="form-control" id="tts_expert_voice" name="tts_expert_voice" value="{{ settings.tts_expert_voice }}">
-                                <div class="form-text">e.g., Puck, Kore, etc.</div>
+                                <select class="form-select" id="tts_expert_voice" name="tts_expert_voice">
+                                    {% for voice in voices %}
+                                        <option value="{{ voice }}" {% if voice == settings.tts_expert_voice %}selected{% endif %}>{{ voice }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <button type="submit" class="btn btn-primary">Save Settings</button>
                             <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Home</a>

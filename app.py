@@ -22,6 +22,20 @@ ALLOWED_EXTENSIONS = {'pdf'}
 
 db = SQLAlchemy(app)
 
+# --- Global lists for models and voices ---
+available_text_models = []
+available_tts_models = []
+# The Gemini API does not currently provide an endpoint to list voices,
+# so we are using a hardcoded list of available prebuilt voices.
+available_voices = [
+    'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 
+    'Callirrhoe', 'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 
+    'Despina', 'Erinome', 'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar', 
+    'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird', 'Zubenelgenubi', 
+    'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat'
+]
+
+
 # --- Database Models ---
 class Folder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -35,8 +49,8 @@ class PDFFile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(100), unique=True, nullable=False)
     text = db.Column(db.Text, nullable=False)
-    figures = db.Column(db.Text)  # JSON-encoded list of figure paths
-    captions = db.Column(db.Text)  # JSON-encoded list of captions
+    figures = db.Column(db.Text)
+    captions = db.Column(db.Text)
     summary = db.Column(db.Text, nullable=True)
     dialogue_transcript = db.Column(db.Text, nullable=True)
     folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
@@ -53,7 +67,7 @@ class Settings(db.Model):
     tts_model = db.Column(db.String(100), nullable=False, default='gemini-2.5-flash-preview-tts')
     tts_host_voice = db.Column(db.String(100), nullable=False, default='Kore')
     tts_expert_voice = db.Column(db.String(100), nullable=False, default='Puck')
-    summary_prompt = db.Column(db.Text, nullable=False, default='Summarize this research paper. Provide a concise overview of the introduction, methods, key findings, and conclusion. The summary should be clear and accessible to someone familiar with the general field.')
+    summary_prompt = db.Column(db.Text, nullable=False, default='Summarize this research paper. Provide a concise overview of the introduction, methods, key findings, and conclusion.')
 
     def __repr__(self):
         return f'<Settings {self.id}>'
@@ -67,7 +81,6 @@ os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
 
 # --- Helper Functions ---
 def get_settings():
-    """Gets settings from DB, creating them if they don't exist."""
     settings = Settings.query.first()
     if settings:
         return settings
@@ -81,23 +94,41 @@ def get_settings():
         return Settings.query.first()
 
 def init_gemini_client(app_instance):
-    """Initializes the Gemini Client and attaches it to the app instance."""
+    global available_text_models, available_tts_models
     with app_instance.app_context():
         settings = get_settings()
         api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
         if api_key:
             try:
-                app_instance.gemini_client = genai.Client(api_key=api_key)
+                client = genai.Client(api_key=api_key)
+                app_instance.gemini_client = client
                 app_instance.logger.info("Gemini Client initialized successfully.")
+                
+                # Fetch and filter models
+                available_text_models.clear()
+                available_tts_models.clear()
+                for model in client.models.list():
+                    model_name = model.name.replace("models/", "")
+                    if 'generateContent' in model.supported_actions:
+                         # Heuristic to separate TTS from other generative models
+                        if 'tts' in model_name:
+                            available_tts_models.append(model_name)
+                        else:
+                            available_text_models.append(model_name)
+                
+                available_text_models = sorted(available_text_models)
+                available_tts_models = sorted(available_tts_models)
+                app_instance.logger.info(f"Found {len(available_text_models)} text models and {len(available_tts_models)} TTS models.")
+
             except Exception as e:
                 app_instance.gemini_client = None
-                app_instance.logger.error(f"Failed to initialize Gemini Client: {e}")
+                app_instance.logger.error(f"Failed to initialize Gemini Client or fetch models: {e}")
         else:
             app_instance.gemini_client = None
             app_instance.logger.warning("Gemini API key not found. Generative features will be disabled.")
 
+
 def process_pdf(filepath):
-    """Extracts text, figures, and captions from a PDF file."""
     doc = fitz.open(filepath)
     text = ""
     figures = []
@@ -230,7 +261,6 @@ def generate_dialogue(file_id):
         return {'error': 'Gemini client is not initialized. Please check API key.'}, 500
 
     try:
-        # 1. Generate dialogue script
         script_prompt = f"""
         Based on the following summary, generate a dialogue script for a podcast episode between a 'Host' and an 'Expert'.
         The dialogue should be engaging and informative. The Host should ask questions and the Expert should explain the concepts.
@@ -252,7 +282,6 @@ def generate_dialogue(file_id):
         pdf_file.dialogue_transcript = json.dumps(dialogue, indent=2)
         db.session.commit()
 
-        # 2. Format script for TTS and generate audio
         tts_prompt = "TTS the following conversation between Host and Expert:\n"
         for part in dialogue:
             tts_prompt += f"{part.get('speaker', 'Expert')}: {part.get('line', '')}\n"
@@ -279,7 +308,6 @@ def generate_dialogue(file_id):
         
         tts_response = tts_model.generate_content(tts_prompt, generation_config=generation_config)
         
-        # 3. Process and save audio
         audio_part = tts_response.candidates[0].content.parts[0]
         audio_data = audio_part.inline_data.data
         mime_type = audio_part.inline_data.mime_type
@@ -313,10 +341,14 @@ def settings_route():
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
         settings.summary_prompt = request.form.get('summary_prompt')
         db.session.commit()
-        init_gemini_client(app) # Re-initialize client with new key if provided
+        init_gemini_client(app)
         return redirect(url_for('settings_route'))
 
-    return render_template('settings.html', settings=settings)
+    return render_template('settings.html', 
+                           settings=settings,
+                           text_models=available_text_models,
+                           tts_models=available_tts_models,
+                           voices=available_voices)
 
 # --- Static File Routes ---
 @app.route('/uploads/<filename>')
