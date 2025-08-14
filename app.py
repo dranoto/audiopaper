@@ -5,8 +5,8 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
 import json
 import fitz # PyMuPDF
-import google.generativeai as genai
-from google.generativeai import types
+from google import genai
+#from google.generativeai import types
 import wave
 
 app = Flask(__name__)
