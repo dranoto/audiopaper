@@ -258,24 +258,9 @@ def generate_dialogue(file_id):
                 tts_prompt += f"{speaker}: {line}\n"
 
         # 3. Generate multi-speaker TTS audio
-        # Re-initialize the client for the TTS model
-        api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
-        genai.configure(api_key=api_key)
-        tts_model = genai.GenerativeModel('gemini-1.5-flash-preview-0514') # Placeholder, should be the TTS model when available through this API
-
-        response = genai.generate_text(
-            model='models/text-to-speech', # Use the correct model name for TTS
-            prompt=tts_prompt,
-            temperature=0,
-            # The following config is based on the user's snippet, but the SDK might have a different structure.
-            # This part might need adjustment based on the final SDK for Gemini 2.5 Flash TTS.
-            # For now, I will follow the user's example structure as closely as possible.
-            # The `genai.generate_text` might not be the correct function.
-            # Let's assume `generate_content` is the right one.
-        )
-
         # The user's example used a different client structure.
         # I will adapt it to the `google-generativeai` SDK.
+        # The `get_gemini_model` call above has already configured the API key.
 
         client = genai.GenerativeModel('models/gemini-2.5-flash-preview-tts') # This model name is from the user's example
 
