@@ -15,7 +15,7 @@
                         <h1>Settings</h1>
                     </div>
                     <div class="card-body">
-                        <form action="{{ url_for('settings_route') }}" method="post">
+                        <form action="{{ url_for('settings') }}" method="post">
                             <div class="mb-3">
                                 <label for="gemini_api_key" class="form-label">Gemini API Key</label>
                                 <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key" value="{{ settings.gemini_api_key }}">
