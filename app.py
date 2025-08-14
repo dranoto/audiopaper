@@ -2,6 +2,7 @@ import os
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError
 import json
 import fitz # PyMuPDF
 import google.generativeai as genai
@@ -38,6 +39,7 @@ class PDFFile(db.Model):
 
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    lock = db.Column(db.String(10), unique=True, default='main_settings', nullable=False)
     gemini_api_key = db.Column(db.String(200), nullable=True)
     summary_model = db.Column(db.String(100), nullable=False, default='gemini-pro')
     dialogue_model = db.Column(db.String(100), nullable=False, default='gemini-pro')
@@ -61,13 +63,22 @@ def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
       wf.writeframes(pcm)
 
 def get_settings():
-    # There should only be one settings row in the database
     settings = Settings.query.first()
-    if not settings:
+    if settings:
+        return settings
+
+    # To prevent race conditions in a multi-process environment like gunicorn,
+    # we'll try to create the settings row, but expect that it might fail
+    # if another process created it first.
+    try:
         settings = Settings()
         db.session.add(settings)
         db.session.commit()
-    return settings
+        return settings
+    except IntegrityError:
+        # The row was likely created by another process in the meantime.
+        db.session.rollback()
+        return Settings.query.first()
 
 def get_gemini_model(model_type='summary'):
     settings = get_settings()
