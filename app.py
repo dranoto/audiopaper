@@ -243,29 +243,31 @@ def generated_audio(filename):
 def delete_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
 
-    # Delete the physical files
+    # Store file paths before deleting the database record
+    pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
+    mp3_filename = f"dialogue_{file_id}.mp3"
+    mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+
+    # Delete from database first
+    db.session.delete(pdf_file)
+    db.session.commit()
+    app.logger.info(f"Deleted file_id {file_id} from database.")
+
+    # Then, delete the physical files
     try:
-        # Delete PDF file
-        pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
             app.logger.info(f"Deleted PDF file: {pdf_path}")
 
-        # Delete generated audio file
-        mp3_filename = f"dialogue_{file_id}.mp3"
-        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
         if os.path.exists(mp3_filepath):
             os.remove(mp3_filepath)
             app.logger.info(f"Deleted audio file: {mp3_filepath}")
 
     except Exception as e:
-        app.logger.error(f"Error deleting physical files for file_id {file_id}: {e}")
-        return {'error': 'Error deleting physical files'}, 500
-
-    # Delete from database
-    db.session.delete(pdf_file)
-    db.session.commit()
-    app.logger.info(f"Deleted file_id {file_id} from database.")
+        # Log the error, but don't return an error response to the client
+        # because the database record is already gone. The primary goal of
+        # data consistency has been achieved.
+        app.logger.error(f"Error deleting physical files for what was file_id {file_id}: {e}")
 
     return {'success': True}
 
