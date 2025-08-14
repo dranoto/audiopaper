@@ -7,8 +7,10 @@ import fitz # PyMuPDF
 import google.generativeai as genai
 
 # Configure the Gemini API
-# IMPORTANT: Replace "YOUR_API_KEY" with your actual Gemini API key
-genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+api_key = os.environ.get('GEMINI_API_KEY')
+if not api_key:
+    raise ValueError("GEMINI_API_KEY environment variable not set. Please set it in your .env file.")
+genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-pro')
 
 app = Flask(__name__)
@@ -29,6 +31,9 @@ class PDFFile(db.Model):
 
     def __repr__(self):
         return f'<PDFFile {self.filename}>'
+
+with app.app_context():
+    db.create_all()
 
 def process_pdf(filepath):
     doc = fitz.open(filepath)
@@ -132,8 +137,3 @@ def summarize(file_id):
         summary = "Error: Could not generate summary at this time."
 
     return render_template('summary.html', summary=summary)
-
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True, use_reloader=False)

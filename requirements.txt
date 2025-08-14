@@ -5,3 +5,4 @@ PyMuPDF
 Flask-SQLAlchemy
 SQLAlchemy
 google-generativeai
+gunicorn
