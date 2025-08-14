@@ -31,6 +31,10 @@
                                 <label for="dialogue_model" class="form-label">Dialogue Generation Model</label>
                                 <input type="text" class="form-control" id="dialogue_model" name="dialogue_model" value="{{ settings.dialogue_model }}">
                             </div>
+                            <div class="mb-3">
+                                <label for="summary_prompt" class="form-label">Summary Prompt</label>
+                                <textarea class="form-control" id="summary_prompt" name="summary_prompt" rows="3">{{ settings.summary_prompt }}</textarea>
+                            </div>
                             <hr>
                             <h3>Text-to-Speech Voices (Gemini 2.5 Flash Preview)</h3>
                             <div class="mb-3">
