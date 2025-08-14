@@ -5,3 +5,15 @@ __pycache__/
 
 # Instance folder
 instance/
+
+# Uploads folder
+uploads/
+
+# Figures folder
+static/figures/
+
+# Environment variables
+.env
+
+# macOS
+.DS_Store
