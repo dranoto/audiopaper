@@ -1,11 +1,11 @@
 import os
 import json
 import pathlib
+import re
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from google.genai import types
-import re
 from sqlalchemy.exc import SQLAlchemyError
 from database import db, init_db, Folder, PDFFile, Settings, get_settings
 from services import (
@@ -259,20 +259,15 @@ def delete_file(file_id):
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
             app.logger.info(f"Deleted PDF file: {pdf_path}")
-
         if os.path.exists(mp3_filepath):
             os.remove(mp3_filepath)
             app.logger.info(f"Deleted audio file: {mp3_filepath}")
-
     except Exception as e:
         # Log the error, but don't return an error response to the client
-        # because the database record is already gone. The primary goal of
-        # data consistency has been achieved.
+        # because the database record is already gone.
         app.logger.error(f"Error deleting physical files for what was file_id {file_id}: {e}")
 
     return {'success': True}
-
-from sqlalchemy.exc import SQLAlchemyError
 
 @app.route('/rename_file/<int:file_id>', methods=['POST'])
 def rename_file(file_id):
@@ -319,8 +314,6 @@ def rename_file(file_id):
                 f"File is at {new_path} but DB has {original_filename}. Manual intervention required. "
                 f"Rollback error: {rollback_e}"
             )
-            # This is a critical state. The file system and DB are out of sync.
-            # The error message to the user should reflect the DB error.
             return {'error': 'A critical error occurred: Database update failed and filesystem rollback also failed. Please contact support.'}, 500
 
         return {'error': 'Failed to update file record in the database. The file rename has been reverted.'}, 500
@@ -330,7 +323,6 @@ def move_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     new_folder_id = request.json.get('new_folder_id')
 
-    # Allow moving to root (no folder)
     if new_folder_id == 'root':
         pdf_file.folder_id = None
     else:
@@ -345,10 +337,6 @@ def move_file(file_id):
 def delete_folder(folder_id):
     folder = Folder.query.get_or_404(folder_id)
 
-    # Note: This will cascade delete PDF files within the folder due to DB relationship
-    # and their physical files will be handled if the relationship is configured with cascade delete hooks.
-    # For now, we assume we only delete empty folders or the user knows the files will be deleted.
-    # A safer implementation would be to check if the folder is empty first.
     if folder.files:
         return {'error': 'Cannot delete a folder that is not empty.'}, 400
 
