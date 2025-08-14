@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 import json
 import fitz # PyMuPDF
 from google import genai
-from google.generativeai import types
+from google.genai import types
 import io
 import wave
 import pathlib
