@@ -312,7 +312,11 @@ def rename_file(file_id):
         db.session.commit()
         app.logger.info(f"Updated database for file_id {file_id} to new name {new_filename}")
 
-        return {'success': True, 'new_filename': new_filename}
+        return {
+            'success': True,
+            'new_filename': new_filename,
+            'new_url': url_for('uploaded_file', filename=new_filename)
+        }
 
     except (OSError, SQLAlchemyError) as e:
         db.session.rollback()
