@@ -253,9 +253,14 @@ def summarize_file(file_id):
 @app.route('/summary/<int:file_id>')
 def view_summary(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
-    return render_template('summary.html', file=pdf_file)
+    audio_url = None
+    mp3_filename = f"dialogue_{file_id}.mp3"
+    mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+    if os.path.exists(mp3_filepath):
+        audio_url = url_for('generated_audio', filename=mp3_filename)
+    return render_template('summary.html', file=pdf_file, audio_url=audio_url)
 
-@app.route('/generate_dialogue/<int:file_id>')
+@app.route('/generate_dialogue/<int:file_id>', methods=['POST'])
 def generate_dialogue(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     settings = get_settings()
