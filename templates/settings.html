@@ -15,7 +15,7 @@
                         <h1>Settings</h1>
                     </div>
                     <div class="card-body">
-                        <form action="{{ url_for('settings') }}" method="post">
+                        <form action="{{ url_for('settings_route') }}" method="post">
                             <div class="mb-3">
                                 <label for="gemini_api_key" class="form-label">Gemini API Key</label>
                                 <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key" value="{{ settings.gemini_api_key }}">
@@ -31,21 +31,25 @@
                                 <label for="dialogue_model" class="form-label">Dialogue Generation Model</label>
                                 <input type="text" class="form-control" id="dialogue_model" name="dialogue_model" value="{{ settings.dialogue_model }}">
                             </div>
+                             <div class="mb-3">
+                                <label for="tts_model" class="form-label">Text-to-Speech Model</label>
+                                <input type="text" class="form-control" id="tts_model" name="tts_model" value="{{ settings.tts_model }}">
+                            </div>
                             <div class="mb-3">
                                 <label for="summary_prompt" class="form-label">Summary Prompt</label>
                                 <textarea class="form-control" id="summary_prompt" name="summary_prompt" rows="3">{{ settings.summary_prompt }}</textarea>
                             </div>
                             <hr>
-                            <h3>Text-to-Speech Voices (Gemini 2.5 Flash Preview)</h3>
+                            <h3>Text-to-Speech Voices</h3>
                             <div class="mb-3">
                                 <label for="tts_host_voice" class="form-label">Host Voice</label>
                                 <input type="text" class="form-control" id="tts_host_voice" name="tts_host_voice" value="{{ settings.tts_host_voice }}">
-                                <div class="form-text">e.g., Kore, Puck, Duke</div>
+                                <div class="form-text">e.g., Kore, Puck, etc.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="tts_expert_voice" class="form-label">Expert Voice</label>
                                 <input type="text" class="form-control" id="tts_expert_voice" name="tts_expert_voice" value="{{ settings.tts_expert_voice }}">
-                                <div class="form-text">e.g., Puck, Kore, Duke</div>
+                                <div class="form-text">e.g., Puck, Kore, etc.</div>
                             </div>
                             <button type="submit" class="btn btn-primary">Save Settings</button>
                             <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Home</a>
