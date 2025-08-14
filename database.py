@@ -25,6 +25,14 @@ class PDFFile(db.Model):
     def __repr__(self):
         return f'<PDFFile {self.filename}>'
 
+class Task(db.Model):
+    id = db.Column(db.String(36), primary_key=True)  # UUID length
+    status = db.Column(db.String(20), nullable=False, default='processing')
+    result = db.Column(db.Text, nullable=True) # Will store JSON result
+
+    def __repr__(self):
+        return f'<Task {self.id} [{self.status}]>'
+
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     lock = db.Column(db.String(10), unique=True, default='main_settings', nullable=False)
@@ -61,7 +69,4 @@ def get_settings():
 def init_db(app):
     with app.app_context():
         db.init_app(app)
-        # Check if the tables already exist before creating them
-        with db.engine.connect() as connection:
-            if not db.engine.dialect.has_table(connection, 'folder'):
-                db.create_all()
+        db.create_all()

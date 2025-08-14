@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from google.genai import types
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from database import db, init_db, Folder, PDFFile, Settings, get_settings
+from database import db, init_db, Folder, PDFFile, Settings, get_settings, Task
 from services import (
     init_gemini_client,
     process_pdf,
@@ -31,13 +31,6 @@ init_db(app)
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
-
-# --- Task Management ---
-tasks = {}
-
-def run_with_app_context(target, **kwargs):
-    with app.app_context():
-        target(**kwargs)
 
 # --- Flask Routes ---
 @app.route('/')
@@ -77,60 +70,78 @@ def upload_file():
 
     return redirect(url_for('index'))
 
-def _run_summary_generation(task_id, file_id):
+def _run_summary_generation(app, task_id, file_id):
     """Worker function to run summary generation in the background."""
-    tasks[task_id] = {'status': 'processing', 'result': None}
-    try:
-        pdf_file = PDFFile.query.get_or_404(file_id)
-        settings = get_settings()
+    with app.app_context():
+        try:
+            task = Task.query.get(task_id)
+            if not task:
+                app.logger.error(f"Task {task_id} not found in database.")
+                return
 
-        if not app.gemini_client:
-            raise Exception("Gemini client not initialized.")
+            pdf_file = PDFFile.query.get(file_id)
+            settings = get_settings()
 
-        uploaded_file = None
-        filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
-        app.logger.info(f"Task {task_id}: Uploading {filepath}...")
-        uploaded_file = app.gemini_client.files.upload(file=filepath)
+            if not app.gemini_client:
+                raise Exception("Gemini client not initialized.")
 
-        prompt = settings.summary_prompt
-        model_name = f"models/{settings.summary_model}"
-        
-        app.logger.info(f"Task {task_id}: Generating summary with {model_name}...")
-        response = app.gemini_client.models.generate_content(
-            model=model_name,
-            contents=[uploaded_file, prompt]
-        )
-        
-        pdf_file.summary = response.text
-        db.session.commit()
-        app.logger.info(f"Task {task_id}: Summary saved for file_id {file_id}.")
+            uploaded_file = None
+            filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
+            app.logger.info(f"Task {task_id}: Uploading {filepath}...")
+            uploaded_file = app.gemini_client.files.upload(file=filepath)
 
-        tasks[task_id]['status'] = 'complete'
-        tasks[task_id]['result'] = {'success': True}
+            prompt = settings.summary_prompt
+            model_name = f"models/{settings.summary_model}"
 
-    except Exception as e:
-        app.logger.error(f"Task {task_id}: Error generating summary for file_id {file_id}: {e}")
-        tasks[task_id]['status'] = 'error'
-        tasks[task_id]['result'] = {'error': str(e)}
-    finally:
-        if 'uploaded_file' in locals() and uploaded_file:
-            app.logger.info(f"Task {task_id}: Deleting uploaded file {uploaded_file.name}.")
-            app.gemini_client.files.delete(name=uploaded_file.name)
+            app.logger.info(f"Task {task_id}: Generating summary with {model_name}...")
+            response = app.gemini_client.models.generate_content(
+                model=model_name,
+                contents=[uploaded_file, prompt]
+            )
+
+            pdf_file.summary = response.text
+            task.status = 'complete'
+            task.result = json.dumps({'success': True})
+            db.session.commit()
+            app.logger.info(f"Task {task_id}: Summary saved for file_id {file_id}.")
+
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Task {task_id}: Error generating summary for file_id {file_id}: {e}")
+            task = Task.query.get(task_id)
+            task.status = 'error'
+            task.result = json.dumps({'error': str(e)})
+            db.session.commit()
+        finally:
+            if 'uploaded_file' in locals() and uploaded_file:
+                app.logger.info(f"Task {task_id}: Deleting uploaded file {uploaded_file.name}.")
+                app.gemini_client.files.delete(name=uploaded_file.name)
 
 @app.route('/summarize_file/<int:file_id>', methods=['POST'])
 def summarize_file(file_id):
     task_id = str(uuid.uuid4())
-    thread = threading.Thread(target=run_with_app_context,
-                              kwargs={'target': _run_summary_generation, 'task_id': task_id, 'file_id': file_id})
+    new_task = Task(id=task_id, status='processing')
+    db.session.add(new_task)
+    db.session.commit()
+
+    thread = threading.Thread(target=_run_summary_generation, args=(app, task_id, file_id))
     thread.start()
+
     return jsonify({'task_id': task_id}), 202
 
 @app.route('/summarize_status/<task_id>')
 def summarize_status(task_id):
-    task = tasks.get(task_id)
-    if not task:
-        return jsonify({'status': 'not_found'}), 404
-    return jsonify(task)
+    task = Task.query.get_or_404(task_id)
+    response_data = {
+        'status': task.status,
+        'result': json.loads(task.result) if task.result else None
+    }
+
+    if task.status in ['complete', 'error']:
+        db.session.delete(task)
+        db.session.commit()
+
+    return jsonify(response_data)
 
 
 @app.route('/file_content/<int:file_id>')
@@ -148,94 +159,112 @@ def file_content(file_id):
         'audio_url': audio_url
     }
 
-def _run_dialogue_generation(task_id, file_id):
+def _run_dialogue_generation(app, task_id, file_id):
     """Worker function to run dialogue generation in the background."""
-    tasks[task_id] = {'status': 'processing', 'result': None}
-    try:
-        pdf_file = PDFFile.query.get_or_404(file_id)
-        settings = get_settings()
+    with app.app_context():
+        try:
+            task = Task.query.get(task_id)
+            if not task:
+                app.logger.error(f"Task {task_id} not found in database.")
+                return
 
-        if not app.gemini_client:
-            raise Exception("Gemini client not initialized.")
+            pdf_file = PDFFile.query.get(file_id)
+            settings = get_settings()
 
-        uploaded_file = None
-        filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
-        app.logger.info(f"Task {task_id}: Uploading {filepath} for dialogue...")
-        uploaded_file = app.gemini_client.files.upload(file=filepath)
+            if not app.gemini_client:
+                raise Exception("Gemini client not initialized.")
 
-        dialogue_model_name = f"models/{settings.dialogue_model}"
-        app.logger.info(f"Task {task_id}: Generating transcript with {dialogue_model_name}...")
-        transcript_response = app.gemini_client.models.generate_content(
-            model=dialogue_model_name,
-            contents=[uploaded_file, settings.dialogue_prompt]
-        )
-        transcript = transcript_response.text
-        pdf_file.dialogue_transcript = transcript
-        db.session.commit()
-        app.logger.info(f"Task {task_id}: Transcript saved for file_id {file_id}.")
+            uploaded_file = None
+            filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
+            app.logger.info(f"Task {task_id}: Uploading {filepath} for dialogue...")
+            uploaded_file = app.gemini_client.files.upload(file=filepath)
 
-        app.logger.info(f"Task {task_id}: Generating audio from transcript...")
-        tts_model_name = f"models/{settings.tts_model}"
-        # ... (rest of the TTS generation logic remains the same)
-        tts_config = types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
-                    speaker_voice_configs=[
-                        types.SpeakerVoiceConfig(
-                            speaker='Host',
-                            voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_host_voice))
-                        ),
-                        types.SpeakerVoiceConfig(
-                            speaker='Expert',
-                            voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_expert_voice))
-                        ),
-                    ]
+            dialogue_model_name = f"models/{settings.dialogue_model}"
+            app.logger.info(f"Task {task_id}: Generating transcript with {dialogue_model_name}...")
+            transcript_response = app.gemini_client.models.generate_content(
+                model=dialogue_model_name,
+                contents=[uploaded_file, settings.dialogue_prompt]
+            )
+            transcript = transcript_response.text
+            pdf_file.dialogue_transcript = transcript
+
+            app.logger.info(f"Task {task_id}: Generating audio from transcript...")
+            tts_model_name = f"models/{settings.tts_model}"
+            tts_config = types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+                        speaker_voice_configs=[
+                            types.SpeakerVoiceConfig(
+                                speaker='Host',
+                                voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_host_voice))
+                            ),
+                            types.SpeakerVoiceConfig(
+                                speaker='Expert',
+                                voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_expert_voice))
+                            ),
+                        ]
+                    )
                 )
             )
-        )
-        tts_response = app.gemini_client.models.generate_content(
-            model=tts_model_name, contents=[transcript], config=tts_config
-        )
-        audio_part = tts_response.candidates[0].content.parts[0]
-        audio_data = audio_part.inline_data.data
-        mime_type = audio_part.inline_data.mime_type
-        match = re.search(r'rate=(\d+)', mime_type)
-        sample_rate = int(match.group(1)) if match else 24000
-        audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=sample_rate, channels=1)
-        mp3_filename = f"dialogue_{file_id}.mp3"
-        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
-        audio.export(mp3_filepath, format="mp3")
+            tts_response = app.gemini_client.models.generate_content(
+                model=tts_model_name, contents=[transcript], config=tts_config
+            )
+            audio_part = tts_response.candidates[0].content.parts[0]
+            audio_data = audio_part.inline_data.data
+            mime_type = audio_part.inline_data.mime_type
+            match = re.search(r'rate=(\d+)', mime_type)
+            sample_rate = int(match.group(1)) if match else 24000
+            audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=sample_rate, channels=1)
+            mp3_filename = f"dialogue_{file_id}.mp3"
+            mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+            audio.export(mp3_filepath, format="mp3")
 
-        audio_url = url_for('generated_audio', filename=mp3_filename)
+            audio_url = url_for('generated_audio', filename=mp3_filename)
 
-        tasks[task_id]['status'] = 'complete'
-        tasks[task_id]['result'] = {'audio_url': audio_url, 'transcript': pdf_file.dialogue_transcript}
+            task.status = 'complete'
+            task.result = json.dumps({'audio_url': audio_url, 'transcript': pdf_file.dialogue_transcript})
+            db.session.commit()
+            app.logger.info(f"Task {task_id}: Dialogue and audio saved for file_id {file_id}.")
 
-    except Exception as e:
-        app.logger.error(f"Task {task_id}: Error generating dialogue for file_id {file_id}: {e}")
-        tasks[task_id]['status'] = 'error'
-        tasks[task_id]['result'] = {'error': str(e)}
-    finally:
-        if 'uploaded_file' in locals() and uploaded_file:
-            app.logger.info(f"Task {task_id}: Deleting uploaded file {uploaded_file.name}.")
-            app.gemini_client.files.delete(name=uploaded_file.name)
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Task {task_id}: Error generating dialogue for file_id {file_id}: {e}")
+            task = Task.query.get(task_id)
+            task.status = 'error'
+            task.result = json.dumps({'error': str(e)})
+            db.session.commit()
+        finally:
+            if 'uploaded_file' in locals() and uploaded_file:
+                app.logger.info(f"Task {task_id}: Deleting uploaded file {uploaded_file.name}.")
+                app.gemini_client.files.delete(name=uploaded_file.name)
 
 
 @app.route('/generate_dialogue/<int:file_id>', methods=['POST'])
 def generate_dialogue(file_id):
     task_id = str(uuid.uuid4())
-    thread = threading.Thread(target=run_with_app_context,
-                              kwargs={'target': _run_dialogue_generation, 'task_id': task_id, 'file_id': file_id})
+    new_task = Task(id=task_id, status='processing')
+    db.session.add(new_task)
+    db.session.commit()
+
+    thread = threading.Thread(target=_run_dialogue_generation, args=(app, task_id, file_id))
     thread.start()
+
     return jsonify({'task_id': task_id}), 202
 
 @app.route('/dialogue_status/<task_id>')
 def dialogue_status(task_id):
-    task = tasks.get(task_id)
-    if not task:
-        return jsonify({'status': 'not_found'}), 404
-    return jsonify(task)
+    task = Task.query.get_or_404(task_id)
+    response_data = {
+        'status': task.status,
+        'result': json.loads(task.result) if task.result else None
+    }
+
+    if task.status in ['complete', 'error']:
+        db.session.delete(task)
+        db.session.commit()
+
+    return jsonify(response_data)
 
 
 @app.route('/settings', methods=['GET', 'POST'])
