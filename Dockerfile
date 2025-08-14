@@ -4,6 +4,8 @@ FROM python:3.9-slim
 # Set the working directory in the container
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y ffmpeg
+
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/static
 
