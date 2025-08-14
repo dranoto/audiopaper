@@ -6,8 +6,10 @@ from sqlalchemy.exc import IntegrityError
 import json
 import fitz # PyMuPDF
 from google import genai
-#from google.generativeai import types
+from google.generativeai import types
 import wave
+import pathlib
+from pydub import AudioSegment
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -32,6 +34,8 @@ class PDFFile(db.Model):
     text = db.Column(db.Text, nullable=False)
     figures = db.Column(db.Text)  # JSON-encoded list of figure paths
     captions = db.Column(db.Text)  # JSON-encoded list of captions
+    summary = db.Column(db.Text, nullable=True)
+    dialogue_transcript = db.Column(db.Text, nullable=True)
     folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
 
     def __repr__(self):
@@ -45,6 +49,7 @@ class Settings(db.Model):
     dialogue_model = db.Column(db.String(100), nullable=False, default='gemini-pro')
     tts_host_voice = db.Column(db.String(100), nullable=False, default='Kore')
     tts_expert_voice = db.Column(db.String(100), nullable=False, default='Puck')
+    summary_prompt = db.Column(db.Text, nullable=True, default='Summarize this document as a list of the most important takeaways.')
 
     def __repr__(self):
         return f'<Settings {self.id}>'
@@ -54,13 +59,6 @@ with app.app_context():
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
-
-def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
-   with wave.open(filename, "wb") as wf:
-      wf.setnchannels(channels)
-      wf.setsampwidth(sample_width)
-      wf.setframerate(rate)
-      wf.writeframes(pcm)
 
 def get_settings():
     settings = Settings.query.first()
@@ -182,27 +180,45 @@ def upload_file():
         return redirect(url_for('index'))
     return redirect(request.url)
 
-@app.route('/summarize/<int:file_id>')
-def summarize(file_id):
+@app.route('/summarize_file/<int:file_id>', methods=['POST'])
+def summarize_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
-    text = pdf_file.text
     settings = get_settings()
 
     if not app.gemini_client:
-        summary = "Error: Gemini client is not initialized. Please check the API key."
-        return render_template('summary.html', summary=summary)
+        return {'error': 'Gemini client is not initialized. Please check the API key.'}, 500
 
     try:
+        # 1. Upload the file to the File API
+        filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
+        uploaded_file = app.gemini_client.files.upload(file=filepath)
+
+        # 2. Generate the summary
+        prompt = settings.summary_prompt or "Summarize this document."
         response = app.gemini_client.models.generate_content(
             model=settings.summary_model,
-            contents=[f"Summarize the following text:\n\n{text}"]
+            contents=[uploaded_file, prompt]
         )
         summary = response.text
+
+        # 3. Save the summary to the database
+        pdf_file.summary = summary
+        db.session.commit()
+
+        # 4. Clean up the file from the server
+        app.gemini_client.files.delete(name=uploaded_file.name)
+
+        return {'success': True, 'redirect_url': url_for('view_summary', file_id=file_id)}
+
     except Exception as e:
         app.logger.error(f"Error generating summary for file_id {file_id}: {e}")
-        summary = f"Error: Could not generate summary. ({e})"
+        return {'error': f'An error occurred while generating the summary. {e}'}, 500
 
-    return render_template('summary.html', summary=summary)
+
+@app.route('/summary/<int:file_id>')
+def view_summary(file_id):
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    return render_template('summary.html', file=pdf_file)
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -225,14 +241,13 @@ def generated_audio(filename):
 @app.route('/generate_dialogue/<int:file_id>')
 def generate_dialogue(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
-    text = pdf_file.text
     settings = get_settings()
 
     if not app.gemini_client:
         return {'error': 'Gemini client is not initialized. Please check the API key.'}, 500
 
     try:
-        # 1. Generate dialogue script with a standard Gemini model
+        # 1. Generate dialogue script
         script_prompt = f"""
         Based on the following text, generate a dialogue script for a podcast episode between a 'Host' and an 'Expert'.
         The dialogue should be engaging and informative, summarizing the key points of the text.
@@ -241,7 +256,7 @@ def generate_dialogue(file_id):
 
         Here is the text:
         ---
-        {text[:4000]}
+        {pdf_file.text[:4000]}
         ---
         """
         generation_config = {"response_mime_type": "application/json"}
@@ -251,6 +266,10 @@ def generate_dialogue(file_id):
             generation_config=generation_config
         )
         dialogue = json.loads(response.text)
+
+        # Save the transcript
+        pdf_file.dialogue_transcript = json.dumps(dialogue, indent=2)
+        db.session.commit()
 
         # 2. Format the script for the TTS model
         tts_prompt = "TTS the following conversation between Host and Expert:\n"
@@ -290,16 +309,18 @@ def generate_dialogue(file_id):
               )
            )
         )
-
         audio_data = tts_response.candidates[0].content.parts[0].inline_data.data
 
-        # 4. Save the audio file
-        audio_filename = f"dialogue_{file_id}.wav"
-        audio_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], audio_filename)
-        wave_file(audio_filepath, audio_data)
+        # 4. Save the audio file as MP3
+        mp3_filename = f"dialogue_{file_id}.mp3"
+        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+
+        # Convert WAV data (in memory) to MP3
+        audio = AudioSegment.from_wav(io.BytesIO(audio_data))
+        audio.export(mp3_filepath, format="mp3")
 
         # 5. Return URL to the audio file
-        audio_url = url_for('generated_audio', filename=audio_filename)
+        audio_url = url_for('generated_audio', filename=mp3_filename)
         return {'audio_url': audio_url}
 
     except Exception as e:
@@ -315,7 +336,10 @@ def settings():
         settings.dialogue_model = request.form.get('dialogue_model')
         settings.tts_host_voice = request.form.get('tts_host_voice')
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
+        settings.summary_prompt = request.form.get('summary_prompt')
         db.session.commit()
+        # Re-initialize the client if the API key changed.
+        init_gemini_client(app)
         return redirect(url_for('settings'))
 
     return render_template('settings.html', settings=settings)

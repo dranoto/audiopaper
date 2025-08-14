@@ -44,7 +44,7 @@
                                                 <a class="nav-link" href="#" onclick="viewPdf('{{ url_for('uploaded_file', filename=file.filename) }}', {{ file.id }})">
                                                     {{ file.filename }}
                                                 </a>
-                                                <a href="{{ url_for('summarize', file_id=file.id) }}" class="btn btn-sm btn-outline-secondary ms-2">Summarize</a>
+                                                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="summarizeFile({{ file.id }})">Summarize</button>
                                                 <button class="btn btn-sm btn-outline-primary ms-2" onclick="generateDialogue({{ file.id }})">Dialogue</button>
                                             </div>
                                         </li>
@@ -58,7 +58,7 @@
                                         <a class="nav-link" href="#" onclick="viewPdf('{{ url_for('uploaded_file', filename=file.filename) }}', {{ file.id }})">
                                             {{ file.filename }}
                                         </a>
-                                        <a href="{{ url_for('summarize', file_id=file.id) }}" class="btn btn-sm btn-outline-secondary ms-2">Summarize</a>
+                                        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="summarizeFile({{ file.id }})">Summarize</button>
                                         <button class="btn btn-sm btn-outline-primary ms-2" onclick="generateDialogue({{ file.id }})">Dialogue</button>
                                     </div>
                                 </li>
@@ -236,6 +236,26 @@
                         figuresContainer.innerHTML = '<p>No figures found in this PDF.</p>';
                     }
                 });
+        }
+
+        function summarizeFile(fileId) {
+            alert('Generating summary... this may take a moment. You will be redirected when it is complete.');
+
+            fetch(`/summarize_file/${fileId}`, {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert('Error generating summary: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An unexpected error occurred. Check the console for details.');
+            });
         }
 
         function generateDialogue(fileId) {
