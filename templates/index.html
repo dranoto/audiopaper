@@ -4,65 +4,267 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Paper to Podcast</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body {
-            font-family: sans-serif;
-            margin: 0;
-            display: flex;
+        body, html {
+            height: 100%;
+        }
+        .sidebar {
             height: 100vh;
+            overflow-y: auto;
         }
-        #left-column {
-            width: 20%;
-            border-right: 1px solid #ccc;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        #main-content {
-            width: 80%;
-            padding: 20px;
-            box-sizing: border-box;
+        .main-content {
+            height: 100vh;
             display: flex;
             flex-direction: column;
+            overflow-y: auto;
         }
         #pdf-viewer {
             flex-grow: 1;
-            border: 1px solid #ccc;
-        }
-        #audio-player {
-            width: 100%;
-            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <div id="left-column">
-        <h2>Folders</h2>
-        <!-- Folder and file list will go here -->
-        <div id="file-list">
-            <ul>
-                {% for file in files %}
-                    <li>
-                        {{ file.filename }}
-                        <a href="{{ url_for('summarize', file_id=file.id) }}">Summarize</a>
-                    </li>
-                {% endfor %}
-            </ul>
+    <div class="container-fluid">
+        <div class="row">
+            <nav id="left-column" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <h2 class="px-3">Folders</h2>
+                    <div id="file-list">
+                        <ul class="nav flex-column">
+                            {% for folder in folders %}
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#">
+                                        <strong>{{ folder.name }}</strong>
+                                    </a>
+                                    <ul class="nav flex-column ms-3">
+                                        {% for file in folder.files %}
+                                        <li class="nav-item">
+                                            <div class="d-flex align-items-center">
+                                                <a class="nav-link" href="#" onclick="viewPdf('{{ url_for('uploaded_file', filename=file.filename) }}', {{ file.id }})">
+                                                    {{ file.filename }}
+                                                </a>
+                                                <a href="{{ url_for('summarize', file_id=file.id) }}" class="btn btn-sm btn-outline-secondary ms-2">Summarize</a>
+                                                <button class="btn btn-sm btn-outline-primary ms-2" onclick="generateDialogue({{ file.id }})">Dialogue</button>
+                                            </div>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </li>
+                            {% endfor %}
+                            {% for file in files_without_folder %}
+                                <li class="nav-item">
+                                    <div class="d-flex align-items-center">
+                                        <a class="nav-link" href="#" onclick="viewPdf('{{ url_for('uploaded_file', filename=file.filename) }}', {{ file.id }})">
+                                            {{ file.filename }}
+                                        </a>
+                                        <a href="{{ url_for('summarize', file_id=file.id) }}" class="btn btn-sm btn-outline-secondary ms-2">Summarize</a>
+                                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="generateDialogue({{ file.id }})">Dialogue</button>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <hr>
+                    <div class="px-3">
+                        <h3>Create New Folder</h3>
+                        <form action="/create_folder" method="post">
+                            <div class="input-group mb-3">
+                                <input type="text" name="folder_name" class="form-control" placeholder="Folder Name">
+                                <button class="btn btn-outline-secondary" type="submit">Create</button>
+                            </div>
+                        </form>
+                    </div>
+                    <hr>
+                    <div class="px-3">
+                        <h3>Upload New PDF</h3>
+                        <form action="/upload" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <input type="file" name="file" class="form-control" accept="application/pdf">
+                            </div>
+                            <div class="mb-3">
+                                <label for="folder_id" class="form-label">Select Folder</label>
+                                <select class="form-select" name="folder_id" id="folder_id">
+                                    <option value="">(No Folder)</option>
+                                    {% for folder in folders %}
+                                    <option value="{{ folder.id }}">{{ folder.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Upload</button>
+                        </form>
+                    </div>
+                </div>
+            </nav>
+
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Paper to Podcast</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <a href="{{ url_for('settings') }}" class="btn btn-sm btn-outline-secondary">
+                            Settings
+                        </a>
+                    </div>
+                </div>
+
+                <div id="pdf-viewer" class="border text-center">
+                    <div id="pagination-controls" style="display: none;">
+                        <button id="prev" class="btn btn-secondary">Previous</button>
+                        <span>Page: <span id="page_num"></span> / <span id="page_count"></span></span>
+                        <button id="next" class="btn btn-secondary">Next</button>
+                    </div>
+                    <canvas id="pdf-canvas"></canvas>
+                </div>
+
+                <div class="mt-3">
+                    <h3>Extracted Figures</h3>
+                    <div id="figures-container"></div>
+                </div>
+
+
+                <div class="mt-auto p-3">
+                    <audio id="audio-player" class="w-100" controls>
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            </main>
         </div>
-        <hr>
-        <h3>Upload New PDF</h3>
-        <form action="/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="file" accept="application/pdf">
-            <input type="submit" value="Upload">
-        </form>
     </div>
-    <div id="main-content">
-        <h2>PDF Viewer</h2>
-        <div id="pdf-viewer">
-            <p style="text-align: center; padding-top: 50px;">Select a file to view the PDF here.</p>
-        </div>
-        <audio id="audio-player" controls>
-            Your browser does not support the audio element.
-        </audio>
-    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        const scale = 1.5;
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function renderPage(num) {
+            pageRendering = true;
+            pdfDoc.getPage(num).then(function(page) {
+                const viewport = page.getViewport({scale: scale});
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                const renderTask = page.render(renderContext);
+
+                renderTask.promise.then(function() {
+                    pageRendering = false;
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                });
+            });
+
+            document.getElementById('page_num').textContent = num;
+        }
+
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+
+        function onPrevPage() {
+            if (pageNum <= 1) {
+                return;
+            }
+            pageNum--;
+            queueRenderPage(pageNum);
+        }
+        document.getElementById('prev').addEventListener('click', onPrevPage);
+
+        function onNextPage() {
+            if (pageNum >= pdfDoc.numPages) {
+                return;
+            }
+            pageNum++;
+            queueRenderPage(pageNum);
+        }
+        document.getElementById('next').addEventListener('click', onNextPage);
+
+        function viewPdf(url, fileId) {
+            pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
+                pdfDoc = pdfDoc_;
+                document.getElementById('page_count').textContent = pdfDoc.numPages;
+                pageNum = 1;
+                renderPage(pageNum);
+                document.getElementById('pagination-controls').style.display = 'block';
+            });
+
+            fetch(`/file_details/${fileId}`)
+                .then(response => response.json())
+                .then(data => {
+                    const figuresContainer = document.getElementById('figures-container');
+                    figuresContainer.innerHTML = '';
+                    if (data.figures && data.figures.length > 0) {
+                        const row = document.createElement('div');
+                        row.className = 'row';
+                        data.figures.forEach((figure_path, index) => {
+                            const col = document.createElement('div');
+                            col.className = 'col-md-4 mb-3';
+                            const card = document.createElement('div');
+                            card.className = 'card';
+                            const img = document.createElement('img');
+                            img.src = figure_path;
+                            img.className = 'card-img-top';
+                            const cardBody = document.createElement('div');
+                            cardBody.className = 'card-body';
+                            const caption = document.createElement('p');
+                            caption.className = 'card-text';
+                            caption.textContent = data.captions[index];
+                            cardBody.appendChild(caption);
+                            card.appendChild(img);
+                            card.appendChild(cardBody);
+                            col.appendChild(card);
+                            row.appendChild(col);
+                        });
+                        figuresContainer.appendChild(row);
+                    } else {
+                        figuresContainer.innerHTML = '<p>No figures found in this PDF.</p>';
+                    }
+                });
+        }
+
+        function generateDialogue(fileId) {
+            const audioPlayer = document.getElementById('audio-player');
+
+            alert('Generating dialogue... this may take a moment.');
+
+            fetch(`/generate_dialogue/${fileId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.audio_url) {
+                        audioPlayer.src = data.audio_url;
+                        audioPlayer.load();
+                        audioPlayer.play();
+                        alert('Dialogue generated and is now playing.');
+                    } else {
+                        alert('Error generating dialogue: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An unexpected error occurred. Check the console for details.');
+                });
+        }
+    </script>
 </body>
 </html>
