@@ -125,8 +125,8 @@ function updateFileContent(fileId) {
                 const summaryHtml = converter.makeHtml(data.summary);
                 document.getElementById('summary-content').innerHTML = summaryHtml;
             }
-            if (data.dialogue_transcript) {
-                const transcriptHtml = converter.makeHtml(data.dialogue_transcript);
+            if (data.transcript) {
+                const transcriptHtml = converter.makeHtml(data.transcript);
                 document.getElementById('transcript-content').innerHTML = transcriptHtml;
                 // Also enable the podcast button if transcript exists
                 const podcastButton = document.querySelector(`#file-item-${fileId} .podcast-button`);

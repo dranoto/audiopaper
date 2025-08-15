@@ -177,7 +177,7 @@ def file_content(file_id):
 
     return {
         'summary': pdf_file.summary,
-        'dialogue_transcript': pdf_file.dialogue_transcript,
+        'transcript': pdf_file.transcript,
         'audio_url': audio_url
     }
 
@@ -202,13 +202,13 @@ def _run_transcript_generation(app, task_id, file_id):
             app.logger.info(f"Task {task_id}: Generating transcript with {transcript_model_name}...")
             transcript_response = app.gemini_client.models.generate_content(
                 model=transcript_model_name,
-                contents=[uploaded_file, settings.dialogue_prompt]
+                contents=[uploaded_file, settings.transcript_prompt]
             )
-            transcript = transcript_response.text
-            pdf_file.dialogue_transcript = transcript
+            transcript_text = transcript_response.text
+            pdf_file.transcript = transcript_text
 
             task.status = 'complete'
-            task.result = json.dumps({'success': True, 'transcript': transcript})
+            task.result = json.dumps({'success': True, 'transcript': transcript_text})
             db.session.commit()
             app.logger.info(f"Task {task_id}: Transcript saved for file_id {file_id}.")
 
@@ -233,13 +233,13 @@ def _run_podcast_generation(app, task_id, file_id):
             pdf_file = PDFFile.query.get(file_id)
             settings = get_settings()
 
-            if not pdf_file.dialogue_transcript:
+            if not pdf_file.transcript:
                 raise Exception("Transcript not found for this file.")
 
             if not app.gemini_client:
                 raise Exception("Gemini client not initialized.")
 
-            transcript = pdf_file.dialogue_transcript
+            transcript = pdf_file.transcript
             app.logger.info(f"Task {task_id}: Generating audio from transcript for file {file_id}...")
             tts_model_name = f"models/{settings.tts_model}"
             tts_config = types.GenerateContentConfig(
@@ -389,7 +389,7 @@ def settings():
         settings.tts_host_voice = request.form.get('tts_host_voice')
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
         settings.summary_prompt = request.form.get('summary_prompt')
-        settings.dialogue_prompt = request.form.get('dialogue_prompt')
+        settings.transcript_prompt = request.form.get('transcript_prompt')
         db.session.commit()
         init_gemini_client(app)
         return redirect(url_for('settings'))
