@@ -1,6 +1,7 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
 
 let currentFileId = null;
+let chatHistory = [];
 let activePollers = {};
 let pdfDoc = null;
 let pageNum = 1;
@@ -63,6 +64,9 @@ document.getElementById('next').addEventListener('click', () => {
 
 function viewPdf(url, fileId, filename) {
     currentFileId = fileId;
+    chatHistory = [];
+    document.getElementById('chat-messages').innerHTML = '<div class="text-center text-muted">Ask a question to get started.</div>';
+
 
     document.getElementById('main-content-title').textContent = filename;
     document.getElementById('myTab').style.display = 'flex';
@@ -466,4 +470,107 @@ document.addEventListener('DOMContentLoaded', () => {
             viewPdf(url, id, filename);
         }
     });
+
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const chatMessages = document.getElementById('chat-messages');
+
+    function appendChatMessage(message, sender) {
+        // Clear initial message if it exists
+        const initialMessage = chatMessages.querySelector('.text-muted');
+        if (initialMessage) {
+            initialMessage.remove();
+        }
+
+        const messageWrapper = document.createElement('div');
+        messageWrapper.classList.add('chat-message', `${sender}-message`, 'mb-3', 'd-flex');
+
+        const icon = document.createElement('div');
+        icon.classList.add('me-2');
+        icon.innerHTML = sender === 'user' ? '<i class="bi bi-person-circle"></i>' : '<i class="bi bi-robot"></i>';
+
+        const content = document.createElement('div');
+        content.classList.add('message-content');
+
+        // Use showdown to convert markdown to HTML for assistant messages
+        if (sender === 'assistant') {
+            content.innerHTML = converter.makeHtml(message);
+        } else {
+            // Treat user input as plain text to prevent XSS.
+            // The `textContent` property automatically escapes HTML entities.
+            content.textContent = message;
+            // Use CSS `white-space` to preserve newlines and wrap text.
+            content.style.whiteSpace = 'pre-wrap';
+        }
+
+        messageWrapper.appendChild(icon);
+        messageWrapper.appendChild(content);
+
+        chatMessages.appendChild(messageWrapper);
+        chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
+        return content; // Return the content div to update it while streaming
+    }
+
+    async function handleChatSubmit(event) {
+        event.preventDefault();
+        if (!currentFileId) {
+            alert('Please select a file first.');
+            return;
+        }
+
+        const userMessage = chatInput.value.trim();
+        if (!userMessage) return;
+
+        chatInput.value = '';
+        chatInput.disabled = true;
+        chatForm.querySelector('button[type="submit"]').disabled = true;
+
+        appendChatMessage(userMessage, 'user');
+
+        // Show thinking indicator
+        const assistantMessageContent = appendChatMessage('<span class="thinking"></span>', 'assistant');
+
+        try {
+            const response = await fetch(`/chat/${currentFileId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: userMessage,
+                    history: chatHistory
+                }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Network response was not ok: ${errorText}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let assistantResponse = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                assistantResponse += chunk;
+                assistantMessageContent.innerHTML = converter.makeHtml(assistantResponse);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // Add to history
+            chatHistory.push({ user: userMessage, assistant: assistantResponse });
+
+        } catch (error) {
+            console.error('Chat error:', error);
+            assistantMessageContent.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
+        } finally {
+            chatInput.disabled = false;
+            chatForm.querySelector('button[type="submit"]').disabled = false;
+            chatInput.focus();
+        }
+    }
+
+    chatForm.addEventListener('submit', handleChatSubmit);
 });
