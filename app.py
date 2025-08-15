@@ -17,6 +17,7 @@ from services import (
     available_text_models,
     available_tts_models,
     available_voices,
+    generate_voice_sample,
 )
 
 # --- App and DB Setup ---
@@ -568,6 +569,44 @@ def rename_folder(folder_id):
         folder.name = original_name  # Revert the name in the object
         app.logger.warning(f"Failed to rename folder_id {folder_id} to '{new_name}' because the name already exists.")
         return {'error': 'A folder with this name already exists.'}, 400
+
+@app.route('/play_voice_sample', methods=['POST'])
+def play_voice_sample():
+    data = request.get_json()
+    voice = data.get('voice')
+    if not voice:
+        return jsonify({'error': 'Voice parameter is required'}), 400
+
+    if not app.gemini_client:
+         return jsonify({'error': 'Gemini client not initialized. Please set API key in settings.'}), 500
+
+    sample_text = "Hello, this is a sample of the selected voice."
+    samples_folder = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], 'samples')
+    os.makedirs(samples_folder, exist_ok=True)
+
+    # Sanitize voice name for filename
+    safe_filename = re.sub(r'[^a-zA-Z0-9_-]', '_', voice)
+    mp3_filename = f"{safe_filename}.mp3"
+    mp3_filepath = os.path.join(samples_folder, mp3_filename)
+
+    if not os.path.exists(mp3_filepath):
+        try:
+            app.logger.info(f"Generating voice sample for '{voice}'...")
+            settings = get_settings()
+            tts_model_name = f"models/{settings.tts_model}"
+
+            audio_data = generate_voice_sample(app.gemini_client, tts_model_name, voice, sample_text)
+
+            audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=24000, channels=1)
+            audio.export(mp3_filepath, format="mp3")
+            app.logger.info(f"Saved voice sample to {mp3_filepath}")
+
+        except Exception as e:
+            app.logger.error(f"Error generating voice sample for '{voice}': {e}")
+            return jsonify({'error': str(e)}), 500
+
+    audio_url = url_for('generated_audio', filename=f'samples/{mp3_filename}')
+    return jsonify({'audio_url': audio_url})
 
 
 # --- App Initialization ---

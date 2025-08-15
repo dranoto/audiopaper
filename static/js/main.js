@@ -692,4 +692,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     chatForm.addEventListener('submit', handleChatSubmit);
+
+    // --- Settings Page Specific Logic ---
+    if (document.querySelector('body.settings-page')) {
+        const playButtons = document.querySelectorAll('.play-sample-button');
+        let currentAudio = null;
+        let originalButtonIcon = null;
+
+        playButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const targetId = button.dataset.targetSelect;
+                const select = document.getElementById(targetId);
+                const voice = select.value;
+                const icon = button.querySelector('i');
+                originalButtonIcon = icon.className;
+
+                // Stop any currently playing audio
+                if (currentAudio && !currentAudio.paused) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                     const previousButton = document.querySelector('.playing');
+                    if(previousButton) {
+                        previousButton.querySelector('i').className = originalButtonIcon;
+                        previousButton.classList.remove('playing');
+                    }
+                }
+
+                // If clicking the same button that is playing, just stop it.
+                if (button.classList.contains('playing')) {
+                    button.classList.remove('playing');
+                    icon.className = originalButtonIcon;
+                    currentAudio = null;
+                    return;
+                }
+
+                icon.className = 'spinner-border spinner-border-sm';
+                button.disabled = true;
+
+                fetch('/play_voice_sample', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ voice: voice }),
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    currentAudio = new Audio(data.audio_url);
+                    button.classList.add('playing');
+                    icon.className = 'bi bi-stop-circle-fill'; // Change to stop icon
+                    button.disabled = false;
+
+                    currentAudio.play();
+
+                    currentAudio.addEventListener('ended', () => {
+                        button.classList.remove('playing');
+                        icon.className = originalButtonIcon;
+                        currentAudio = null;
+                    });
+                })
+                .catch(error => {
+                    console.error('Error playing voice sample:', error);
+                    alert('Failed to play voice sample. See console for details.');
+                    icon.className = originalButtonIcon;
+                    button.disabled = false;
+                });
+            });
+        });
+    }
 });

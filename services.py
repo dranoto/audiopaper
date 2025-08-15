@@ -155,3 +155,24 @@ def process_pdf(filepath):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'pdf'}
+
+def generate_voice_sample(client, model_name, voice_name, text):
+    """
+    Generates a voice sample using the specified voice.
+    """
+    tts_config = types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
+            )
+        )
+    )
+
+    # The prompt for single-voice TTS is just the text itself.
+    tts_response = client.models.generate_content(
+        model=model_name, contents=[text], config=tts_config
+    )
+
+    audio_part = tts_response.candidates[0].content.parts[0]
+    return audio_part.inline_data.data
