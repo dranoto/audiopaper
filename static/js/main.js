@@ -72,7 +72,7 @@ function viewPdf(url, fileId, filename) {
     document.getElementById('myTab').style.display = 'flex';
 
     document.getElementById('summary-content').innerHTML = '<p>No summary generated yet.</p>';
-    document.getElementById('dialogue-content').innerHTML = '<p>No dialogue generated yet.</p>';
+    document.getElementById('transcript-content').innerHTML = '<p>No transcript generated yet.</p>';
     document.getElementById('figures-container').innerHTML = '<p>Loading figures...</p>';
     audioPlayer.src = '';
 
@@ -126,8 +126,11 @@ function updateFileContent(fileId) {
                 document.getElementById('summary-content').innerHTML = summaryHtml;
             }
             if (data.dialogue_transcript) {
-                const dialogueHtml = converter.makeHtml(data.dialogue_transcript);
-                document.getElementById('dialogue-content').innerHTML = dialogueHtml;
+                const transcriptHtml = converter.makeHtml(data.dialogue_transcript);
+                document.getElementById('transcript-content').innerHTML = transcriptHtml;
+                // Also enable the podcast button if transcript exists
+                const podcastButton = document.querySelector(`#file-item-${fileId} .podcast-button`);
+                if(podcastButton) podcastButton.disabled = false;
             }
             if (data.audio_url) {
                 audioPlayer.src = data.audio_url;
@@ -183,12 +186,23 @@ function pollTaskStatus(taskUrl, fileId, type) {
                             button.classList.remove('btn-outline-secondary');
                             button.classList.add('btn-outline-success');
                         }
-                    } else if (type === 'Dialogue') {
+                    } else if (type === 'Transcript') {
                          const fileItem = document.getElementById(`file-item-${fileId}`);
                         if (fileItem) {
-                            const button = fileItem.querySelector('[data-action="generateDialogue"]');
-                            button.textContent = 'Re-generate';
+                            const button = fileItem.querySelector('[data-action="generateTranscript"]');
+                            button.textContent = 'Re-generate Transcript';
                             button.classList.remove('btn-outline-primary');
+                            button.classList.add('btn-outline-success');
+                            // Also enable the podcast button
+                            const podcastButton = fileItem.querySelector('.podcast-button');
+                            if (podcastButton) podcastButton.disabled = false;
+                        }
+                    } else if (type === 'Podcast') {
+                        const fileItem = document.getElementById(`file-item-${fileId}`);
+                        if (fileItem) {
+                            const button = fileItem.querySelector('[data-action="generatePodcast"]');
+                            button.textContent = 'Re-generate Podcast';
+                            button.classList.remove('btn-outline-secondary');
                             button.classList.add('btn-outline-success');
                         }
                     }
@@ -196,8 +210,14 @@ function pollTaskStatus(taskUrl, fileId, type) {
                     clearInterval(interval);
                     delete activePollers[fileId];
                     removePendingTask(fileId);
-                    const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
-                    contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
+                    let contentEl;
+                    if (type === 'Summary') contentEl = document.getElementById('summary-content');
+                    else if (type === 'Transcript') contentEl = document.getElementById('transcript-content');
+                    else if (type === 'Podcast') { // Show error on the button or a modal? For now, just log it.
+                        console.error("Podcast generation failed:", data.result.error);
+                        alert("Podcast generation failed: " + data.result.error);
+                    }
+                    if(contentEl) contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
                     showNotification(`${type} Generation Failed`, `There was an error generating the ${type.toLowerCase()}.`);
                 }
                 // If 'processing', do nothing and wait for the next poll
@@ -205,9 +225,11 @@ function pollTaskStatus(taskUrl, fileId, type) {
             .catch(err => {
                 clearInterval(interval);
                 delete activePollers[fileId];
-                // Don't remove from pending tasks, so it can be retried on reload
-                const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
-                contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}. Please reload the page to retry.</p>`;
+                let contentEl;
+                if (type === 'Summary') contentEl = document.getElementById('summary-content');
+                else if (type === 'Transcript') contentEl = document.getElementById('transcript-content');
+
+                if(contentEl) contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}. Please reload the page to retry.</p>`;
             });
     }, 2000); // Poll every 2 seconds
 
@@ -238,26 +260,52 @@ function summarizeFile(fileId) {
         });
 }
 
-function generateDialogue(fileId) {
-    showLoading(document.getElementById('dialogue-content'), 'Generating dialogue and audio... This may take a moment.');
-    new bootstrap.Tab(document.getElementById('dialogue-tab')).show();
+function generateTranscript(fileId) {
+    showLoading(document.getElementById('transcript-content'), 'Generating transcript... This may take a moment.');
+    new bootstrap.Tab(document.getElementById('transcript-tab')).show();
     requestNotificationPermission();
 
-    fetch(`/generate_dialogue/${fileId}`, { method: 'POST' })
+    fetch(`/generate_transcript/${fileId}`, { method: 'POST' })
          .then(response => {
             if (response.status === 202) {
                 return response.json();
             } else {
-                throw new Error('Failed to start dialogue generation.');
+                throw new Error('Failed to start transcript generation.');
             }
         })
         .then(data => {
-            const taskUrl = `/dialogue_status/${data.task_id}`;
-            savePendingTask(fileId, { taskUrl: taskUrl, type: 'Dialogue' });
-            pollTaskStatus(taskUrl, fileId, 'Dialogue');
+            const taskUrl = `/transcript_status/${data.task_id}`;
+            savePendingTask(fileId, { taskUrl: taskUrl, type: 'Transcript' });
+            pollTaskStatus(taskUrl, fileId, 'Transcript');
         })
         .catch(err => {
-            document.getElementById('dialogue-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+            document.getElementById('transcript-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+        });
+}
+
+function generatePodcast(fileId) {
+    const button = document.querySelector(`#file-item-${fileId} [data-action="generatePodcast"]`);
+    button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...`;
+    button.disabled = true;
+    requestNotificationPermission();
+
+    fetch(`/generate_podcast/${fileId}`, { method: 'POST' })
+        .then(response => {
+            if (response.status === 202) {
+                return response.json();
+            } else {
+                throw new Error('Failed to start podcast generation.');
+            }
+        })
+        .then(data => {
+            const taskUrl = `/podcast_status/${data.task_id}`;
+            savePendingTask(fileId, { taskUrl: taskUrl, type: 'Podcast' });
+            pollTaskStatus(taskUrl, fileId, 'Podcast');
+        })
+        .catch(err => {
+            alert('Error starting podcast generation: ' + err.message);
+            button.innerHTML = 'Podcast';
+            button.disabled = false;
         });
 }
 
@@ -455,8 +503,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'summarizeFile':
                     summarizeFile(id);
                     break;
-                case 'generateDialogue':
-                    generateDialogue(id);
+                case 'generateTranscript':
+                    generateTranscript(id);
+                    break;
+                case 'generatePodcast':
+                    generatePodcast(id);
                     break;
                 case 'renameFolder':
                     renameFolder(id, name);
