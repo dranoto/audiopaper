@@ -104,6 +104,9 @@
                         <button class="nav-link" id="dialogue-tab" data-bs-toggle="tab" data-bs-target="#dialogue-tab-pane" type="button" role="tab" aria-controls="dialogue-tab-pane" aria-selected="false">Dialogue</button>
                     </li>
                     <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat-tab-pane" type="button" role="tab" aria-controls="chat-tab-pane" aria-selected="false">Chat</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
                         <button class="nav-link" id="figures-tab" data-bs-toggle="tab" data-bs-target="#figures-tab-pane" type="button" role="tab" aria-controls="figures-tab-pane" aria-selected="false">Figures</button>
                     </li>
                 </ul>
@@ -125,6 +128,18 @@
                     </div>
                     <div class="tab-pane fade p-3" id="dialogue-tab-pane" role="tabpanel" aria-labelledby="dialogue-tab">
                         <div id="dialogue-content"></div>
+                    </div>
+                    <div class="tab-pane fade" id="chat-tab-pane" role="tabpanel" aria-labelledby="chat-tab">
+                        <div class="d-flex flex-column h-100 p-3">
+                            <div id="chat-messages" class="flex-grow-1 mb-3" style="overflow-y: auto; height: 60vh;">
+                                <!-- Chat messages will be appended here -->
+                                <div class="text-center text-muted">Ask a question to get started.</div>
+                            </div>
+                            <form id="chat-form" class="d-flex">
+                                <input type="text" id="chat-input" class="form-control me-2" placeholder="Ask a question about the document..." autocomplete="off" required>
+                                <button type="submit" class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
+                            </form>
+                        </div>
                     </div>
                     <div class="tab-pane fade p-3" id="figures-tab-pane" role="tabpanel" aria-labelledby="figures-tab">
                         <div id="figures-container" class="row"></div>

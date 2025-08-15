@@ -4,7 +4,7 @@ import pathlib
 import re
 import uuid
 import threading
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
 from google.genai import types
@@ -268,6 +268,57 @@ def dialogue_status(task_id):
         db.session.commit()
 
     return jsonify(response_data)
+
+
+def _generate_chat_response(pdf_text, history, question, model_name, client, app_logger):
+    """Generator function to stream chat responses."""
+    system_prompt = (
+        "You are a helpful research assistant. Your task is to answer questions based "
+        "solely on the content of the provided document. Do not use any external knowledge. "
+        "If the answer cannot be found within the document, state that clearly. "
+        "The user is having a conversation with you, so maintain context from the history. "
+        "Format your answers clearly using Markdown where appropriate (e.g., lists, bold text)."
+    )
+
+    prompt_parts = [system_prompt, f"DOCUMENT CONTEXT:\n---\n{pdf_text}\n---\n"]
+    for entry in history:
+        prompt_parts.append(f"User: {entry['user']}")
+        prompt_parts.append(f"Assistant: {entry['assistant']}")
+    prompt_parts.append(f"User: {question}")
+
+    final_prompt = "\n\n".join(prompt_parts)
+
+    try:
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[final_prompt],
+            stream=True
+        )
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        app_logger.error(f"Error streaming chat response: {e}")
+        yield f"Error: Could not generate a response. Details: {str(e)}"
+
+
+@app.route('/chat/<int:file_id>', methods=['POST'])
+def chat_with_file(file_id):
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    data = request.get_json()
+    if not data or 'message' not in data:
+        return Response("Error: Message is required in the request body.", status=400, mimetype='text/plain')
+
+    question = data['message']
+    history = data.get('history', [])
+
+    if not hasattr(app, 'gemini_client') or not app.gemini_client:
+        return Response("Error: Gemini client not initialized. Please set API key in settings.", status=500, mimetype='text/plain')
+
+    settings = get_settings()
+    model_name = f"models/{settings.summary_model}"
+
+    return Response(stream_with_context(_generate_chat_response(pdf_file.text, history, question, model_name, app.gemini_client, app.logger)), mimetype='text/plain')
 
 
 @app.route('/settings', methods=['GET', 'POST'])
