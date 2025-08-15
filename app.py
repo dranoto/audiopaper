@@ -373,12 +373,12 @@ def chat_with_file(file_id):
     settings = get_settings()
     model_name = f"models/{settings.chat_model}"
 
-    response_text = _generate_chat_response(uploaded_file, history, question, model_name, app.gemini_client, app.logger)
-
-    if response_text.startswith("Error:"):
-        return jsonify({'error': response_text}), 500
-
-    return jsonify({'message': response_text})
+    try:
+        response_text = _generate_chat_response(uploaded_file, history, question, model_name, app.gemini_client, app.logger)
+        return jsonify({'message': response_text})
+    except Exception as e:
+        app.logger.error(f"Chat generation failed for file_id {file_id}: {e}")
+        return jsonify({'error': f'Could not generate a response. Details: {str(e)}'}), 500
 
 
 @app.route('/settings', methods=['GET', 'POST'])
