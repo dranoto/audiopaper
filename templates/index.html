@@ -92,24 +92,39 @@
                     <h1 id="main-content-title" class="h2">Select a file to view</h1>
                 </div>
 
-                <!-- Tab navigation -->
-                <ul class="nav nav-tabs" id="myTab" role="tablist" style="display: none;">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="document-tab" data-bs-toggle="tab" data-bs-target="#document-tab-pane" type="button" role="tab" aria-controls="document-tab-pane" aria-selected="true">Document</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-tab-pane" type="button" role="tab" aria-controls="summary-tab-pane" aria-selected="false">Summary</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="dialogue-tab" data-bs-toggle="tab" data-bs-target="#dialogue-tab-pane" type="button" role="tab" aria-controls="dialogue-tab-pane" aria-selected="false">Dialogue</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat-tab-pane" type="button" role="tab" aria-controls="chat-tab-pane" aria-selected="false">Chat</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="figures-tab" data-bs-toggle="tab" data-bs-target="#figures-tab-pane" type="button" role="tab" aria-controls="figures-tab-pane" aria-selected="false">Figures</button>
-                    </li>
-                </ul>
+                <div id="content-controls" class="d-flex justify-content-between align-items-center" style="display: none;">
+                    <!-- Tab navigation -->
+                    <ul class="nav nav-tabs" id="myTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="document-tab" data-bs-toggle="tab" data-bs-target="#document-tab-pane" type="button" role="tab" aria-controls="document-tab-pane" aria-selected="true">Document</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-tab-pane" type="button" role="tab" aria-controls="summary-tab-pane" aria-selected="false">Summary</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="transcript-tab" data-bs-toggle="tab" data-bs-target="#transcript-tab-pane" type="button" role="tab" aria-controls="transcript-tab-pane" aria-selected="false">Transcript</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat-tab-pane" type="button" role="tab" aria-controls="chat-tab-pane" aria-selected="false">Chat</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="figures-tab" data-bs-toggle="tab" data-bs-target="#figures-tab-pane" type="button" role="tab" aria-controls="figures-tab-pane" aria-selected="false">Figures</button>
+                        </li>
+                    </ul>
+                     <!-- Action Buttons -->
+                    <div id="generation-buttons" class="ms-auto">
+                        <button id="generate-summary-btn" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-card-text"></i> Summary
+                        </button>
+                        <button id="generate-transcript-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-file-earmark-text"></i> Transcript
+                        </button>
+                        <button id="generate-podcast-btn" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-mic-fill"></i> Podcast
+                        </button>
+                    </div>
+                </div>
+
 
                 <!-- Tab content -->
                 <div class="tab-content flex-grow-1" id="myTabContent">
@@ -126,8 +141,8 @@
                     <div class="tab-pane fade p-3" id="summary-tab-pane" role="tabpanel" aria-labelledby="summary-tab">
                         <div id="summary-content"></div>
                     </div>
-                    <div class="tab-pane fade p-3" id="dialogue-tab-pane" role="tabpanel" aria-labelledby="dialogue-tab">
-                        <div id="dialogue-content"></div>
+                    <div class="tab-pane fade p-3" id="transcript-tab-pane" role="tabpanel" aria-labelledby="transcript-tab">
+                        <div id="transcript-content"></div>
                     </div>
                     <div class="tab-pane fade" id="chat-tab-pane" role="tabpanel" aria-labelledby="chat-tab">
                         <div class="d-flex flex-column h-100 p-3">
