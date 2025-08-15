@@ -89,32 +89,87 @@ function viewPdf(url, fileId, filename) {
         .then(data => {
             const figuresContainer = document.getElementById('figures-container');
             figuresContainer.innerHTML = '';
-            if (data.figures && data.figures.length > 0) {
-                data.figures.forEach((figure_path, index) => {
+            if (data.elements && data.elements.length > 0) {
+                data.elements.forEach(element => {
                     const col = document.createElement('div');
-                    col.className = 'col-md-4 mb-3';
+                    col.className = 'col-lg-6 col-md-12 mb-4'; // Wider for tables
+
                     const card = document.createElement('div');
-                    card.className = 'card';
-                    const img = document.createElement('img');
-                    img.src = figure_path;
-                    img.className = 'card-img-top';
+                    card.className = 'card h-100';
+
                     const cardBody = document.createElement('div');
-                    cardBody.className = 'card-body';
+                    cardBody.className = 'card-body d-flex flex-column';
+
+                    const contentWrapper = document.createElement('div');
+                    contentWrapper.className = 'mb-auto'; // Pushes caption to the bottom
+
+                    if (element.type === 'figure') {
+                        const img = document.createElement('img');
+                        img.src = element.path;
+                        img.className = 'card-img-top';
+                        contentWrapper.appendChild(img);
+                    } else if (element.type === 'table') {
+                        const table = createTableElement(element.data);
+                        contentWrapper.appendChild(table);
+                    }
+
                     const caption = document.createElement('p');
-                    caption.className = 'card-text';
-                    caption.textContent = data.captions[index] || 'No caption available.';
+                    caption.className = 'card-text mt-2'; // Margin top for spacing
+                    caption.textContent = element.caption;
+
+                    cardBody.appendChild(contentWrapper);
                     cardBody.appendChild(caption);
-                    card.appendChild(img);
                     card.appendChild(cardBody);
                     col.appendChild(card);
                     figuresContainer.appendChild(col);
                 });
             } else {
-                figuresContainer.innerHTML = '<p>No figures found in this PDF.</p>';
+                figuresContainer.innerHTML = '<p>No captioned figures or tables found in this document.</p>';
             }
         });
 
     updateFileContent(fileId);
+}
+
+function createTableElement(data) {
+    if (!data) return null;
+
+    const table = document.createElement('table');
+    table.className = 'table table-bordered table-sm'; // Bootstrap classes
+
+    const thead = document.createElement('thead');
+    const tbody = document.createElement('tbody');
+
+    // Assume first row is the header
+    const headerRow = data.length > 0 ? data[0] : [];
+    const trHead = document.createElement('tr');
+    headerRow.forEach(cellText => {
+        const th = document.createElement('th');
+        th.textContent = cellText || '';
+        trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+
+    // Process body rows
+    for (let i = 1; i < data.length; i++) {
+        const rowData = data[i];
+        const tr = document.createElement('tr');
+        rowData.forEach(cellText => {
+            const td = document.createElement('td');
+            td.textContent = cellText || '';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    }
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+
+    const tableContainer = document.createElement('div');
+    tableContainer.className = 'table-responsive';
+    tableContainer.appendChild(table);
+
+    return tableContainer;
 }
 
 function updateFileContent(fileId) {
@@ -612,24 +667,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }),
             });
 
+            const data = await response.json();
+
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Network response was not ok: ${errorText}`);
+                const errorMsg = data.error || `HTTP error! status: ${response.status}`;
+                throw new Error(errorMsg);
             }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let assistantResponse = '';
-
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-
-                const chunk = decoder.decode(value, { stream: true });
-                assistantResponse += chunk;
-                assistantMessageContent.innerHTML = converter.makeHtml(assistantResponse);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
+            const assistantResponse = data.message;
+            assistantMessageContent.innerHTML = converter.makeHtml(assistantResponse);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
 
             // Add to history
             chatHistory.push({ user: userMessage, assistant: assistantResponse });
