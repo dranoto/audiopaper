@@ -64,34 +64,17 @@ document.getElementById('next').addEventListener('click', () => {
 
 function viewPdf(url, fileId, filename) {
     currentFileId = fileId;
-    chatHistory = []; // Reset chat history for the new file
+    chatHistory = [];
     document.getElementById('chat-messages').innerHTML = '<div class="text-center text-muted">Ask a question to get started.</div>';
-    document.getElementById('main-content-title').textContent = filename;
-    document.getElementById('content-controls').style.display = 'flex';
 
-    // Reset content areas
-    document.getElementById('summary-content').innerHTML = '<p>Click the "Summary" button to generate a summary.</p>';
-    document.getElementById('transcript-content').innerHTML = '<p>Click the "Transcript" button to generate a transcript.</p>';
+
+    document.getElementById('main-content-title').textContent = filename;
+    document.getElementById('myTab').style.display = 'flex';
+
+    document.getElementById('summary-content').innerHTML = '<p>No summary generated yet.</p>';
+    document.getElementById('dialogue-content').innerHTML = '<p>No dialogue generated yet.</p>';
     document.getElementById('figures-container').innerHTML = '<p>Loading figures...</p>';
     audioPlayer.src = '';
-    audioPlayer.style.display = 'none'; // Hide player initially
-
-    // Trigger caching on the backend
-    fetch(`/cache_file/${fileId}`, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                console.error('Caching failed:', data.error);
-                alert(`Error caching file: ${data.error}`);
-            } else {
-                console.log('File cached:', data.status);
-            }
-        })
-        .catch(err => {
-            console.error('Failed to send cache request:', err);
-            alert('An error occurred while trying to cache the file.');
-        });
-
 
     pdfjsLib.getDocument(url).promise.then(function(pdfDoc_) {
         pdfDoc = pdfDoc_;
@@ -99,8 +82,6 @@ function viewPdf(url, fileId, filename) {
         pageNum = 1;
         renderPage(pageNum);
         document.getElementById('pagination-controls').style.display = 'block';
-        // Ensure the document tab is active when a new file is loaded
-        new bootstrap.Tab(document.getElementById('document-tab')).show();
     });
 
     fetch(`/file_details/${fileId}`)
@@ -144,15 +125,12 @@ function updateFileContent(fileId) {
                 const summaryHtml = converter.makeHtml(data.summary);
                 document.getElementById('summary-content').innerHTML = summaryHtml;
             }
-            if (data.transcript) {
-                const transcriptHtml = converter.makeHtml(data.transcript);
-                document.getElementById('transcript-content').innerHTML = transcriptHtml;
+            if (data.dialogue_transcript) {
+                const dialogueHtml = converter.makeHtml(data.dialogue_transcript);
+                document.getElementById('dialogue-content').innerHTML = dialogueHtml;
             }
             if (data.audio_url) {
                 audioPlayer.src = data.audio_url;
-                audioPlayer.style.display = 'block';
-            } else {
-                 audioPlayer.style.display = 'none';
             }
         });
 }
@@ -182,8 +160,9 @@ function showNotification(title, body) {
 // --- Content Generation Functions ---
 
 function pollTaskStatus(taskUrl, fileId, type) {
-    if (activePollers[`${type}-${fileId}`]) {
-        clearInterval(activePollers[`${type}-${fileId}`]);
+    // If a poller for this file already exists, clear it before starting a new one.
+    if (activePollers[fileId]) {
+        clearInterval(activePollers[fileId]);
     }
 
     const interval = setInterval(() => {
@@ -192,39 +171,47 @@ function pollTaskStatus(taskUrl, fileId, type) {
             .then(data => {
                 if (data.status === 'complete') {
                     clearInterval(interval);
-                    delete activePollers[`${type}-${fileId}`];
-                    removePendingTask(fileId, type);
+                    delete activePollers[fileId];
+                    removePendingTask(fileId);
                     updateFileContent(fileId);
                     showNotification(`${type} Generation Complete`, `The ${type.toLowerCase()} for your file is ready.`);
+                    if (type === 'Summary') {
+                        const fileItem = document.getElementById(`file-item-${fileId}`);
+                        if (fileItem) {
+                            const button = fileItem.querySelector('[data-action="summarizeFile"]');
+                            button.textContent = 'Re-summarize';
+                            button.classList.remove('btn-outline-secondary');
+                            button.classList.add('btn-outline-success');
+                        }
+                    } else if (type === 'Dialogue') {
+                         const fileItem = document.getElementById(`file-item-${fileId}`);
+                        if (fileItem) {
+                            const button = fileItem.querySelector('[data-action="generateDialogue"]');
+                            button.textContent = 'Re-generate';
+                            button.classList.remove('btn-outline-primary');
+                            button.classList.add('btn-outline-success');
+                        }
+                    }
                 } else if (data.status === 'error') {
                     clearInterval(interval);
-                    delete activePollers[`${type}-${fileId}`];
-                    removePendingTask(fileId, type);
-                    let contentEl;
-                    if (type === 'Summary') contentEl = document.getElementById('summary-content');
-                    else if (type === 'Transcript') contentEl = document.getElementById('transcript-content');
-                    else if (type === 'Podcast') audioPlayer.style.display = 'none';
-
-                    if (contentEl) {
-                        contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
-                    }
+                    delete activePollers[fileId];
+                    removePendingTask(fileId);
+                    const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
+                    contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
                     showNotification(`${type} Generation Failed`, `There was an error generating the ${type.toLowerCase()}.`);
                 }
+                // If 'processing', do nothing and wait for the next poll
             })
             .catch(err => {
                 clearInterval(interval);
-                delete activePollers[`${type}-${fileId}`];
-                let contentEl;
-                if (type === 'Summary') contentEl = document.getElementById('summary-content');
-                else if (type === 'Transcript') contentEl = document.getElementById('transcript-content');
-
-                if(contentEl) {
-                    contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}.</p>`;
-                }
+                delete activePollers[fileId];
+                // Don't remove from pending tasks, so it can be retried on reload
+                const contentEl = (type === 'Summary') ? document.getElementById('summary-content') : document.getElementById('dialogue-content');
+                contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}. Please reload the page to retry.</p>`;
             });
-    }, 2000);
+    }, 2000); // Poll every 2 seconds
 
-    activePollers[`${type}-${fileId}`] = interval;
+    activePollers[fileId] = interval;
 }
 
 
@@ -234,60 +221,43 @@ function summarizeFile(fileId) {
     requestNotificationPermission();
 
     fetch(`/summarize_file/${fileId}`, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.task_id) {
-                const taskUrl = `/summarize_status/${data.task_id}`;
-                savePendingTask(fileId, { taskUrl, type: 'Summary' });
-                pollTaskStatus(taskUrl, fileId, 'Summary');
+        .then(response => {
+            if (response.status === 202) {
+                return response.json();
             } else {
-                 throw new Error(data.error || 'Failed to start summary generation.');
+                throw new Error('Failed to start summary generation.');
             }
+        })
+        .then(data => {
+            const taskUrl = `/summarize_status/${data.task_id}`;
+            savePendingTask(fileId, { taskUrl: taskUrl, type: 'Summary' });
+            pollTaskStatus(taskUrl, fileId, 'Summary');
         })
         .catch(err => {
             document.getElementById('summary-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
         });
 }
 
-function generateTranscript(fileId) {
-    showLoading(document.getElementById('transcript-content'), 'Generating transcript... This may take a moment.');
-    new bootstrap.Tab(document.getElementById('transcript-tab')).show();
+function generateDialogue(fileId) {
+    showLoading(document.getElementById('dialogue-content'), 'Generating dialogue and audio... This may take a moment.');
+    new bootstrap.Tab(document.getElementById('dialogue-tab')).show();
     requestNotificationPermission();
 
-    fetch(`/generate_transcript/${fileId}`, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.task_id) {
-                const taskUrl = `/transcript_status/${data.task_id}`;
-                savePendingTask(fileId, { taskUrl, type: 'Transcript' });
-                pollTaskStatus(taskUrl, fileId, 'Transcript');
+    fetch(`/generate_dialogue/${fileId}`, { method: 'POST' })
+         .then(response => {
+            if (response.status === 202) {
+                return response.json();
             } else {
-                throw new Error(data.error || 'Failed to start transcript generation.');
+                throw new Error('Failed to start dialogue generation.');
             }
         })
-        .catch(err => {
-            document.getElementById('transcript-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
-        });
-}
-
-function generatePodcast(fileId) {
-    audioPlayer.style.display = 'none';
-    showNotification('Podcast Generation Started', 'The audio is being generated and will appear when ready.');
-    requestNotificationPermission();
-
-    fetch(`/generate_podcast/${fileId}`, { method: 'POST' })
-        .then(response => response.json())
         .then(data => {
-             if (data.task_id) {
-                const taskUrl = `/podcast_status/${data.task_id}`;
-                savePendingTask(fileId, { taskUrl, type: 'Podcast' });
-                pollTaskStatus(taskUrl, fileId, 'Podcast');
-            } else {
-                throw new Error(data.error || 'Failed to start podcast generation.');
-            }
+            const taskUrl = `/dialogue_status/${data.task_id}`;
+            savePendingTask(fileId, { taskUrl: taskUrl, type: 'Dialogue' });
+            pollTaskStatus(taskUrl, fileId, 'Dialogue');
         })
         .catch(err => {
-             alert(`Error starting podcast generation: ${err.message}`);
+            document.getElementById('dialogue-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
         });
 }
 
@@ -425,14 +395,13 @@ function getPendingTasks() {
 
 function savePendingTask(fileId, task) {
     const tasks = getPendingTasks();
-    // Use a composite key to allow multiple task types per file
-    tasks[`${task.type}-${fileId}`] = task;
+    tasks[fileId] = task;
     localStorage.setItem('pendingTasks', JSON.stringify(tasks));
 }
 
-function removePendingTask(fileId, type) {
+function removePendingTask(fileId) {
     const tasks = getPendingTasks();
-    delete tasks[`${type}-${fileId}`];
+    delete tasks[fileId];
     localStorage.setItem('pendingTasks', JSON.stringify(tasks));
 }
 
@@ -440,10 +409,8 @@ function removePendingTask(fileId, type) {
 document.addEventListener('DOMContentLoaded', () => {
     // Resume polling for any pending tasks on page load
     const pendingTasks = getPendingTasks();
-    for (const taskKey in pendingTasks) {
-        const task = pendingTasks[taskKey];
-        // Extract fileId from the key, which is formatted as "Type-FileID"
-        const fileId = taskKey.substring(taskKey.indexOf('-') + 1);
+    for (const fileId in pendingTasks) {
+        const task = pendingTasks[fileId];
         pollTaskStatus(task.taskUrl, fileId, task.type);
     }
 
@@ -456,17 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebar.classList.toggle('collapsed');
         appContainer.classList.toggle('sidebar-collapsed');
     });
-
-    document.getElementById('generate-summary-btn').addEventListener('click', () => {
-        if (currentFileId) summarizeFile(currentFileId);
-    });
-    document.getElementById('generate-transcript-btn').addEventListener('click', () => {
-        if (currentFileId) generateTranscript(currentFileId);
-    });
-    document.getElementById('generate-podcast-btn').addEventListener('click', () => {
-        if (currentFileId) generatePodcast(currentFileId);
-    });
-
 
     fileList.addEventListener('click', (event) => {
         const folderToggle = event.target.closest('.folder-toggle');
@@ -496,8 +452,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'deleteFile':
                     deleteFile(id);
                     break;
-                case 'summarizeFile': // This is now handled by the main button
+                case 'summarizeFile':
                     summarizeFile(id);
+                    break;
+                case 'generateDialogue':
+                    generateDialogue(id);
                     break;
                 case 'renameFolder':
                     renameFolder(id, name);
