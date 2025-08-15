@@ -25,20 +25,13 @@
                             <hr>
                             <h3>Model Selection</h3>
                             <div class="mb-3">
-                                <label for="summary_model" class="form-label">Summary Model</label>
-                                <select class="form-select" id="summary_model" name="summary_model">
+                                <label for="generative_model" class="form-label">Generative Model</label>
+                                <select class="form-select" id="generative_model" name="generative_model">
                                     {% for model in text_models %}
-                                        <option value="{{ model }}" {% if model == settings.summary_model %}selected{% endif %}>{{ model }}</option>
+                                        <option value="{{ model }}" {% if model == settings.generative_model %}selected{% endif %}>{{ model }}</option>
                                     {% endfor %}
                                 </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="transcript_model" class="form-label">Transcript Generation Model</label>
-                                <select class="form-select" id="transcript_model" name="transcript_model">
-                                    {% for model in text_models %}
-                                        <option value="{{ model }}" {% if model == settings.transcript_model %}selected{% endif %}>{{ model }}</option>
-                                    {% endfor %}
-                                </select>
+                                <div class="form-text">This model will be used for all text generation tasks (summary, transcript, chat) to ensure cache compatibility.</div>
                             </div>
                             <div class="mb-3">
                                 <label for="summary_prompt" class="form-label">Summary Prompt</label>
