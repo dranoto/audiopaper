@@ -33,10 +33,18 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="dialogue_model" class="form-label">Dialogue Generation Model</label>
-                                <select class="form-select" id="dialogue_model" name="dialogue_model">
+                                <label for="transcript_model" class="form-label">Transcript Model</label>
+                                <select class="form-select" id="transcript_model" name="transcript_model">
                                     {% for model in text_models %}
-                                        <option value="{{ model }}" {% if model == settings.dialogue_model %}selected{% endif %}>{{ model }}</option>
+                                        <option value="{{ model }}" {% if model == settings.transcript_model %}selected{% endif %}>{{ model }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="chat_model" class="form-label">Chat Model</label>
+                                <select class="form-select" id="chat_model" name="chat_model">
+                                    {% for model in text_models %}
+                                        <option value="{{ model }}" {% if model == settings.chat_model %}selected{% endif %}>{{ model }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -53,8 +61,8 @@
                                 <textarea class="form-control" id="summary_prompt" name="summary_prompt" rows="3">{{ settings.summary_prompt }}</textarea>
                             </div>
                             <div class="mb-3">
-                                <label for="dialogue_prompt" class="form-label">Dialogue Prompt</label>
-                                <textarea class="form-control" id="dialogue_prompt" name="dialogue_prompt" rows="5">{{ settings.dialogue_prompt }}</textarea>
+                                <label for="transcript_prompt" class="form-label">Transcript Prompt</label>
+                                <textarea class="form-control" id="transcript_prompt" name="transcript_prompt" rows="5">{{ settings.transcript_prompt }}</textarea>
                             </div>
                             <hr>
                             <h3>Text-to-Speech Voices</h3>

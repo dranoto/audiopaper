@@ -19,7 +19,8 @@ class PDFFile(db.Model):
     figures = db.Column(db.Text)
     captions = db.Column(db.Text)
     summary = db.Column(db.Text, nullable=True)
-    dialogue_transcript = db.Column(db.Text, nullable=True)
+    transcript = db.Column(db.Text, nullable=True)
+    gemini_file_id = db.Column(db.String(100), nullable=True)
     folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
 
     def __repr__(self):
@@ -37,13 +38,14 @@ class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     lock = db.Column(db.String(10), unique=True, default='main_settings', nullable=False)
     gemini_api_key = db.Column(db.String(200), nullable=True)
-    summary_model = db.Column(db.String(100), nullable=False, default='gemini-1.5-pro-latest')
-    dialogue_model = db.Column(db.String(100), nullable=False, default='gemini-1.5-pro-latest')
+    summary_model = db.Column(db.String(100), nullable=False, default='gemini-1.5-flash')
+    transcript_model = db.Column(db.String(100), nullable=False, default='gemini-1.5-flash')
+    chat_model = db.Column(db.String(100), nullable=False, default='gemini-1.5-flash')
     tts_model = db.Column(db.String(100), nullable=False, default='gemini-2.5-flash-preview-tts')
     tts_host_voice = db.Column(db.String(100), nullable=False, default='Kore')
     tts_expert_voice = db.Column(db.String(100), nullable=False, default='Puck')
     summary_prompt = db.Column(db.Text, nullable=False, default='Summarize this research paper. Provide a concise overview of the introduction, methods, key findings, and conclusion.')
-    dialogue_prompt = db.Column(db.Text, nullable=False, default='\n'.join([
+    transcript_prompt = db.Column(db.Text, nullable=False, default='\n'.join([
         "Generate a podcast-style dialogue script based on the attached document.",
         "The script should be a conversation between a 'Host' and an 'Expert'.",
         "The Host should ask engaging questions, and the Expert should explain the key concepts from the document clearly.",
