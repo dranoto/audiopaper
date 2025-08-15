@@ -225,11 +225,25 @@ function pollTaskStatus(taskUrl, fileId, type) {
             .catch(err => {
                 clearInterval(interval);
                 delete activePollers[fileId];
-                let contentEl;
-                if (type === 'Summary') contentEl = document.getElementById('summary-content');
-                else if (type === 'Transcript') contentEl = document.getElementById('transcript-content');
 
-                if(contentEl) contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}. Please reload the page to retry.</p>`;
+                let contentEl;
+                if (type === 'Summary') {
+                    contentEl = document.getElementById('summary-content');
+                } else if (type === 'Transcript') {
+                    contentEl = document.getElementById('transcript-content');
+                } else if (type === 'Podcast') {
+                    alert(`An error occurred while checking the podcast generation status: ${err.message}`);
+                    const button = document.querySelector(`#file-item-${fileId} [data-action="generatePodcast"]`);
+                    if (button) {
+                        button.innerHTML = 'Podcast';
+                        // Re-enable the button since the process has failed.
+                        button.disabled = false;
+                    }
+                }
+
+                if (contentEl) {
+                    contentEl.innerHTML = `<p class="text-danger">Error polling for status: ${err.message}. Please reload the page to retry.</p>`;
+                }
             });
     }, 2000); // Poll every 2 seconds
 
