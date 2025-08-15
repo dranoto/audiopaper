@@ -41,6 +41,7 @@ def index():
     files_without_folder = PDFFile.query.filter_by(folder_id=None).all()
 
     # Check for audio file existence for all files
+
     def _set_audio_exists(file_obj):
         mp3_filename = f"dialogue_{file_obj.id}.mp3"
         mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
