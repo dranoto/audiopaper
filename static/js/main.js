@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chatInput.value = '';
         chatInput.disabled = true;
-        chatForm.querySelector('button').disabled = true;
+        chatForm.querySelector('button[type="submit"]').disabled = true;
 
         appendChatMessage(userMessage, 'user');
 
