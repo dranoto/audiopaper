@@ -567,7 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
             assistantMessageContent.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
         } finally {
             chatInput.disabled = false;
-            chatForm.querySelector('button').disabled = false;
+            chatForm.querySelector('button[type="submit"]').disabled = false;
             chatInput.focus();
         }
     }
