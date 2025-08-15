@@ -94,13 +94,14 @@ def cache_file(file_id):
             contents=[uploaded_file]
         )
 
+        # The temporary file can be deleted now that the cache is created.
+        app.gemini_client.files.delete(name=uploaded_file.name)
+        app.logger.info(f"Deleted temporary file {uploaded_file.name} after caching.")
+
+        # Commit the cache name to the database as the final step.
         pdf_file.cached_content_name = cache.name
         db.session.commit()
         app.logger.info(f"Cache created successfully: {cache.name}")
-
-        # Clean up the uploaded file since it's now cached
-        app.gemini_client.files.delete(name=uploaded_file.name)
-        app.logger.info(f"Deleted temporary file {uploaded_file.name} after caching.")
 
         return jsonify({'status': 'cached', 'cache_name': cache.name})
 
