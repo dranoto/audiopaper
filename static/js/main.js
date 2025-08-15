@@ -211,14 +211,22 @@ function pollTaskStatus(taskUrl, fileId, type) {
                     delete activePollers[fileId];
                     removePendingTask(fileId);
                     let contentEl;
-                    if (type === 'Summary') contentEl = document.getElementById('summary-content');
-                    else if (type === 'Transcript') contentEl = document.getElementById('transcript-content');
-                    else if (type === 'Podcast') { // Show error on the button or a modal? For now, just log it.
-                        console.error("Podcast generation failed:", data.result.error);
-                        alert("Podcast generation failed: " + data.result.error);
+                    if (type === 'Summary') {
+                        contentEl = document.getElementById('summary-content');
+                    } else if (type === 'Transcript') {
+                        contentEl = document.getElementById('transcript-content');
+                    } else if (type === 'Podcast') {
+                        const button = document.querySelector(`#file-item-${fileId} [data-action="generatePodcast"]`);
+                        if (button) {
+                            button.innerHTML = 'Podcast';
+                            button.disabled = false;
+                        }
                     }
-                    if(contentEl) contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
-                    showNotification(`${type} Generation Failed`, `There was an error generating the ${type.toLowerCase()}.`);
+                    if (contentEl) {
+                        contentEl.innerHTML = `<p class="text-danger">Error: ${data.result.error}</p>`;
+                    }
+                    const errorMessage = (data.result && data.result.error) ? data.result.error : 'Unknown error';
+                    showNotification(`${type} Generation Failed`, `There was an error generating the ${type.toLowerCase()}: ${errorMessage}`);
                 }
                 // If 'processing', do nothing and wait for the next poll
             })
@@ -232,11 +240,10 @@ function pollTaskStatus(taskUrl, fileId, type) {
                 } else if (type === 'Transcript') {
                     contentEl = document.getElementById('transcript-content');
                 } else if (type === 'Podcast') {
-                    alert(`An error occurred while checking the podcast generation status: ${err.message}`);
+                    showNotification('Polling Error', `An error occurred while checking the podcast status: ${err.message}`);
                     const button = document.querySelector(`#file-item-${fileId} [data-action="generatePodcast"]`);
                     if (button) {
                         button.innerHTML = 'Podcast';
-                        // Re-enable the button since the process has failed.
                         button.disabled = false;
                     }
                 }
@@ -317,7 +324,7 @@ function generatePodcast(fileId) {
             pollTaskStatus(taskUrl, fileId, 'Podcast');
         })
         .catch(err => {
-            alert('Error starting podcast generation: ' + err.message);
+            showNotification('Podcast Error', 'Error starting podcast generation: ' + err.message);
             button.innerHTML = 'Podcast';
             button.disabled = false;
         });
