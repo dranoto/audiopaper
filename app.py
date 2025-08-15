@@ -87,20 +87,24 @@ def cache_file(file_id):
 
         app.logger.info(f"Creating cache for {uploaded_file.name}...")
         # Note: The model for the cache must match the model used for generation.
-        # We'll use the summary_model as a default, but this could be a setting.
+        # We'll use the generative_model as a default, but this could be a setting.
         settings = get_settings()
         cache = app.gemini_client.caches.create(
-            model=f"models/{settings.summary_model}",
-            contents=[uploaded_file]
+            model=f"models/{settings.generative_model}",
+            config={
+                "contents": [uploaded_file]
+            }
         )
 
         pdf_file.cached_content_name = cache.name
         db.session.commit()
         app.logger.info(f"Cache created successfully: {cache.name}")
 
-        # Clean up the uploaded file since it's now cached
-        app.gemini_client.files.delete(name=uploaded_file.name)
-        app.logger.info(f"Deleted temporary file {uploaded_file.name} after caching.")
+        # Per user feedback, we are no longer deleting the file from the File API
+        # after caching. This allows the original file to be used for other purposes
+        # or for caches to be rebuilt if necessary.
+        # app.gemini_client.files.delete(name=uploaded_file.name)
+        # app.logger.info(f"Deleted temporary file {uploaded_file.name} after caching.")
 
         return jsonify({'status': 'cached', 'cache_name': cache.name})
 
@@ -127,7 +131,7 @@ def _run_summary_generation(app, task_id, file_id):
                 raise Exception(f"File {file_id} is not cached.")
 
             prompt = settings.summary_prompt
-            model_name = f"models/{settings.summary_model}"
+            model_name = f"models/{settings.generative_model}"
 
             app.logger.info(f"Task {task_id}: Generating summary with {model_name} using cache {pdf_file.cached_content_name}...")
             response = app.gemini_client.models.generate_content(
@@ -212,7 +216,7 @@ def _run_transcript_generation(app, task_id, file_id):
             if not pdf_file.cached_content_name:
                 raise Exception(f"File {file_id} is not cached.")
 
-            model_name = f"models/{settings.transcript_model}"
+            model_name = f"models/{settings.generative_model}"
             app.logger.info(f"Task {task_id}: Generating transcript with {model_name} using cache {pdf_file.cached_content_name}...")
             response = app.gemini_client.models.generate_content(
                 model=model_name,
@@ -403,7 +407,7 @@ def chat_with_file(file_id):
         return Response("Error: Gemini client not initialized. Please set API key in settings.", status=500, mimetype='text/plain')
 
     settings = get_settings()
-    model_name = f"models/{settings.summary_model}" # Chat will use the same model as summary for cache compatibility
+    model_name = f"models/{settings.generative_model}" # Chat will use the same model as summary for cache compatibility
 
     return Response(stream_with_context(_generate_chat_response(pdf_file.cached_content_name, history, question, model_name, app.gemini_client, app.logger)), mimetype='text/plain')
 
@@ -413,8 +417,7 @@ def settings():
     settings = get_settings()
     if request.method == 'POST':
         settings.gemini_api_key = request.form.get('gemini_api_key')
-        settings.summary_model = request.form.get('summary_model')
-        settings.transcript_model = request.form.get('transcript_model')
+        settings.generative_model = request.form.get('generative_model')
         settings.tts_model = request.form.get('tts_model')
         settings.tts_host_voice = request.form.get('tts_host_voice')
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
