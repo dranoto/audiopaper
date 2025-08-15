@@ -62,8 +62,9 @@ def upload_file():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
 
-    text, figures, captions = process_pdf(filepath)
-    new_file = PDFFile(filename=filename, text=text, figures=figures, captions=captions)
+    # The new process_pdf returns text, a JSON string of elements, and an empty list for captions
+    text, elements_json, _ = process_pdf(filepath)
+    new_file = PDFFile(filename=filename, text=text, figures=elements_json, captions=json.dumps([]))
     if folder_id:
         new_file.folder_id = folder_id
     db.session.add(new_file)
@@ -320,7 +321,7 @@ def podcast_status(task_id):
 
 
 def _generate_chat_response(uploaded_file, history, question, model_name, client, app_logger):
-    """Generator function to stream chat responses using File API."""
+    """Generates a chat response using the File API."""
     system_prompt = (
         "You are a helpful research assistant. Your task is to answer questions based "
         "solely on the content of the attached file. Do not use any external knowledge. "
@@ -340,15 +341,14 @@ def _generate_chat_response(uploaded_file, history, question, model_name, client
     try:
         response = client.models.generate_content(
             model=model_name,
-            contents=[uploaded_file, final_prompt],
-            stream=True
+            contents=[uploaded_file, final_prompt]
         )
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        return response.text
     except Exception as e:
-        app_logger.error(f"Error streaming chat response: {e}")
-        yield f"Error: Could not generate a response. Details: {str(e)}"
+        app_logger.error(f"Error generating chat response: {e}")
+        # It's better to raise an exception and let the route handler deal with
+        # formatting the HTTP response, but for a minimal change, we return an error string.
+        return f"Error: Could not generate a response. Details: {str(e)}"
 
 
 @app.route('/chat/<int:file_id>', methods=['POST'])
@@ -356,25 +356,29 @@ def chat_with_file(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     data = request.get_json()
     if not data or 'message' not in data:
-        return Response("Error: Message is required in the request body.", status=400, mimetype='text/plain')
+        return jsonify({'error': 'Message is required in the request body.'}), 400
 
     question = data['message']
     history = data.get('history', [])
 
     if not hasattr(app, 'gemini_client') or not app.gemini_client:
-        return Response("Error: Gemini client not initialized. Please set API key in settings.", status=500, mimetype='text/plain')
+        return jsonify({'error': 'Gemini client not initialized. Please set API key in settings.'}), 500
 
     try:
         uploaded_file = _get_or_upload_file(app, pdf_file)
     except Exception as e:
         app.logger.error(f"Chat failed during file check/upload for file_id {file_id}: {e}")
-        return Response(f"Error: Could not access the document file. Details: {str(e)}", status=500, mimetype='text/plain')
-
+        return jsonify({'error': f'Could not access the document file. Details: {str(e)}'}), 500
 
     settings = get_settings()
     model_name = f"models/{settings.chat_model}"
 
-    return Response(stream_with_context(_generate_chat_response(uploaded_file, history, question, model_name, app.gemini_client, app.logger)), mimetype='text/plain')
+    try:
+        response_text = _generate_chat_response(uploaded_file, history, question, model_name, app.gemini_client, app.logger)
+        return jsonify({'message': response_text})
+    except Exception as e:
+        app.logger.error(f"Chat generation failed for file_id {file_id}: {e}")
+        return jsonify({'error': f'Could not generate a response. Details: {str(e)}'}), 500
 
 
 @app.route('/settings', methods=['GET', 'POST'])
@@ -408,12 +412,13 @@ def uploaded_file(filename):
 @app.route('/file_details/<int:file_id>')
 def file_details(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
-    return {
+    # The 'figures' column now stores a JSON string of 'elements' (figures and tables)
+    elements = json.loads(pdf_file.figures or '[]')
+    return jsonify({
         'id': pdf_file.id,
         'filename': pdf_file.filename,
-        'figures': json.loads(pdf_file.figures or '[]'),
-        'captions': json.loads(pdf_file.captions or '[]')
-    }
+        'elements': elements
+    })
 
 @app.route('/generated_audio/<filename>')
 def generated_audio(filename):
