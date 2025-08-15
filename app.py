@@ -149,19 +149,21 @@ def summarize_file(file_id):
 
     return jsonify({'task_id': task_id}), 202
 
-@app.route('/summarize_status/<task_id>')
-def summarize_status(task_id):
+def _get_task_status_response(task_id):
+    """Helper function to get task status and clean up completed tasks."""
     task = Task.query.get_or_404(task_id)
     response_data = {
         'status': task.status,
         'result': json.loads(task.result) if task.result else None
     }
-
     if task.status in ['complete', 'error']:
         db.session.delete(task)
         db.session.commit()
-
     return jsonify(response_data)
+
+@app.route('/summarize_status/<task_id>')
+def summarize_status(task_id):
+    return _get_task_status_response(task_id)
 
 
 @app.route('/file_content/<int:file_id>')
@@ -300,15 +302,7 @@ def generate_transcript(file_id):
 
 @app.route('/transcript_status/<task_id>')
 def transcript_status(task_id):
-    task = Task.query.get_or_404(task_id)
-    response_data = {
-        'status': task.status,
-        'result': json.loads(task.result) if task.result else None
-    }
-    if task.status in ['complete', 'error']:
-        db.session.delete(task)
-        db.session.commit()
-    return jsonify(response_data)
+    return _get_task_status_response(task_id)
 
 @app.route('/generate_podcast/<int:file_id>', methods=['POST'])
 def generate_podcast(file_id):
@@ -322,15 +316,7 @@ def generate_podcast(file_id):
 
 @app.route('/podcast_status/<task_id>')
 def podcast_status(task_id):
-    task = Task.query.get_or_404(task_id)
-    response_data = {
-        'status': task.status,
-        'result': json.loads(task.result) if task.result else None
-    }
-    if task.status in ['complete', 'error']:
-        db.session.delete(task)
-        db.session.commit()
-    return jsonify(response_data)
+    return _get_task_status_response(task_id)
 
 
 def _generate_chat_response(uploaded_file, history, question, model_name, client, app_logger):
