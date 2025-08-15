@@ -143,7 +143,7 @@ def process_pdf(filepath):
                         })
         except Exception as e:
             # Log error if table processing fails for a page
-            print(f"Could not process tables on page {page_num+1}: {e}")
+            logging.warning(f"Could not process tables on page {page_num+1}: {e}")
 
 
     # Sort elements by page and then by vertical position
