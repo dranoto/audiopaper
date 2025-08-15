@@ -493,8 +493,15 @@ document.addEventListener('DOMContentLoaded', () => {
         content.classList.add('message-content');
 
         // Use showdown to convert markdown to HTML for assistant messages
-        const formattedMessage = (sender === 'assistant') ? converter.makeHtml(message) : message.replace(/\n/g, '<br>');
-        content.innerHTML = formattedMessage;
+        if (sender === 'assistant') {
+            content.innerHTML = converter.makeHtml(message);
+        } else {
+            // Treat user input as plain text to prevent XSS.
+            // The `textContent` property automatically escapes HTML entities.
+            content.textContent = message;
+            // Use CSS `white-space` to preserve newlines and wrap text.
+            content.style.whiteSpace = 'pre-wrap';
+        }
 
         messageWrapper.appendChild(icon);
         messageWrapper.appendChild(content);
