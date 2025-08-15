@@ -21,16 +21,4 @@
             </ul>
         </div>
     </div>
-    <div class="d-flex align-items-center ms-4 ps-3 mb-2 file-actions">
-        {% if file.summary %}
-            <button class="btn btn-sm btn-outline-success file-action-button" data-action="summarizeFile" data-id="{{ file.id }}">Re-summarize</button>
-        {% else %}
-            <button class="btn btn-sm btn-outline-secondary file-action-button" data-action="summarizeFile" data-id="{{ file.id }}">Summarize</button>
-        {% endif %}
-        {% if file.dialogue_transcript %}
-            <button class="btn btn-sm btn-outline-success ms-2 file-action-button" data-action="generateDialogue" data-id="{{ file.id }}">Re-generate</button>
-        {% else %}
-            <button class="btn btn-sm btn-outline-primary ms-2 file-action-button" data-action="generateDialogue" data-id="{{ file.id }}">Dialogue</button>
-        {% endif %}
-    </div>
 </li>
