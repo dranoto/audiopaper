@@ -595,9 +595,12 @@ def play_voice_sample():
             settings = get_settings()
             tts_model_name = f"models/{settings.tts_model}"
 
-            audio_data = generate_voice_sample(app.gemini_client, tts_model_name, voice, sample_text)
+            audio_data, mime_type = generate_voice_sample(app.gemini_client, tts_model_name, voice, sample_text)
 
-            audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=24000, channels=1)
+            match = re.search(r'rate=(\d+)', mime_type)
+            sample_rate = int(match.group(1)) if match else 24000
+
+            audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=sample_rate, channels=1)
             audio.export(mp3_filepath, format="mp3")
             app.logger.info(f"Saved voice sample to {mp3_filepath}")
 

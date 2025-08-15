@@ -159,6 +159,7 @@ def allowed_file(filename):
 def generate_voice_sample(client, model_name, voice_name, text):
     """
     Generates a voice sample using the specified voice.
+    Returns a tuple of (audio_data, mime_type).
     """
     tts_config = types.GenerateContentConfig(
         response_modalities=["AUDIO"],
@@ -175,4 +176,4 @@ def generate_voice_sample(client, model_name, voice_name, text):
     )
 
     audio_part = tts_response.candidates[0].content.parts[0]
-    return audio_part.inline_data.data
+    return audio_part.inline_data.data, audio_part.inline_data.mime_type
