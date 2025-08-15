@@ -39,6 +39,19 @@ os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
 def index():
     folders = Folder.query.all()
     files_without_folder = PDFFile.query.filter_by(folder_id=None).all()
+
+    # Check for audio file existence for all files
+    for file in files_without_folder:
+        mp3_filename = f"dialogue_{file.id}.mp3"
+        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+        file.audio_exists = os.path.exists(mp3_filepath)
+
+    for folder in folders:
+        for file in folder.files:
+            mp3_filename = f"dialogue_{file.id}.mp3"
+            mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+            file.audio_exists = os.path.exists(mp3_filepath)
+
     return render_template('index.html', folders=folders, files_without_folder=files_without_folder)
 
 @app.route('/create_folder', methods=['POST'])
@@ -180,6 +193,7 @@ def file_content(file_id):
     return {
         'summary': pdf_file.summary,
         'transcript': pdf_file.transcript,
+        'chat_history': json.loads(pdf_file.chat_history or '[]'),
         'audio_url': audio_url
     }
 
@@ -323,32 +337,27 @@ def podcast_status(task_id):
 
 def _generate_chat_response(uploaded_file, history, question, model_name, client, app_logger):
     """Generates a chat response using the File API."""
-    system_prompt = (
-        "You are a helpful research assistant. Your task is to answer questions based "
-        "solely on the content of the attached file. Do not use any external knowledge. "
-        "If the answer cannot be found within the document, state that clearly. "
-        "The user is having a conversation with you, so maintain context from the history. "
-        "Format your answers clearly using Markdown where appropriate (e.g., lists, bold text)."
-    )
+    system_prompt = {
+        "role": "system",
+        "parts": [
+            "You are a helpful research assistant. Your task is to answer questions based "
+            "solely on the content of the attached file. Do not use any external knowledge. "
+            "If the answer cannot be found within the document, state that clearly. "
+            "The user is having a conversation with you, so maintain context from the history. "
+            "Format your answers clearly using Markdown where appropriate (e.g., lists, bold text)."
+        ]
+    }
 
-    prompt_parts = [system_prompt]
-    for entry in history:
-        prompt_parts.append(f"User: {entry['user']}")
-        prompt_parts.append(f"Assistant: {entry['assistant']}")
-    prompt_parts.append(f"User: {question}")
-
-    final_prompt = "\n\n".join(prompt_parts)
+    full_conversation = [system_prompt] + history + [{'role': 'user', 'parts': [question]}]
 
     try:
         response = client.models.generate_content(
             model=model_name,
-            contents=[uploaded_file, final_prompt]
+            contents=[uploaded_file] + full_conversation
         )
         return response.text
     except Exception as e:
         app_logger.error(f"Error generating chat response: {e}")
-        # It's better to raise an exception and let the route handler deal with
-        # formatting the HTTP response, but for a minimal change, we return an error string.
         return f"Error: Could not generate a response. Details: {str(e)}"
 
 
@@ -360,7 +369,8 @@ def chat_with_file(file_id):
         return jsonify({'error': 'Message is required in the request body.'}), 400
 
     question = data['message']
-    history = data.get('history', [])
+    # Load history from the database
+    history = json.loads(pdf_file.chat_history or '[]')
 
     if not hasattr(app, 'gemini_client') or not app.gemini_client:
         return jsonify({'error': 'Gemini client not initialized. Please set API key in settings.'}), 500
@@ -376,6 +386,13 @@ def chat_with_file(file_id):
 
     try:
         response_text = _generate_chat_response(uploaded_file, history, question, model_name, app.gemini_client, app.logger)
+
+        # Update history and save to database
+        history.append({'role': 'user', 'parts': [question]})
+        history.append({'role': 'model', 'parts': [response_text]})
+        pdf_file.chat_history = json.dumps(history)
+        db.session.commit()
+
         return jsonify({'message': response_text})
     except Exception as e:
         app.logger.error(f"Chat generation failed for file_id {file_id}: {e}")

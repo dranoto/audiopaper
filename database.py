@@ -21,6 +21,7 @@ class PDFFile(db.Model):
     summary = db.Column(db.Text, nullable=True)
     transcript = db.Column(db.Text, nullable=True)
     gemini_file_id = db.Column(db.String(100), nullable=True)
+    chat_history = db.Column(db.Text, nullable=True)  # Store as JSON string
     folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
 
     def __repr__(self):

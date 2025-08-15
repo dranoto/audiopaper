@@ -64,7 +64,7 @@ document.getElementById('next').addEventListener('click', () => {
 
 function viewPdf(url, fileId, filename) {
     currentFileId = fileId;
-    chatHistory = [];
+    chatHistory = []; // Reset on new file load
     document.getElementById('chat-messages').innerHTML = '<div class="text-center text-muted">Ask a question to get started.</div>';
 
 
@@ -183,12 +183,34 @@ function updateFileContent(fileId) {
             if (data.transcript) {
                 const transcriptHtml = converter.makeHtml(data.transcript);
                 document.getElementById('transcript-content').innerHTML = transcriptHtml;
-                // Also enable the podcast button if transcript exists
+                const transcriptButton = document.querySelector(`#file-item-${fileId} [data-action="generateTranscript"]`);
+                if(transcriptButton) {
+                    transcriptButton.textContent = 'Re-generate Transcript';
+                    transcriptButton.classList.remove('btn-outline-primary');
+                    transcriptButton.classList.add('btn-outline-success');
+                }
                 const podcastButton = document.querySelector(`#file-item-${fileId} .podcast-button`);
                 if(podcastButton) podcastButton.disabled = false;
             }
             if (data.audio_url) {
                 audioPlayer.src = data.audio_url;
+                 const podcastButton = document.querySelector(`#file-item-${fileId} [data-action="generatePodcast"]`);
+                if(podcastButton) {
+                    podcastButton.textContent = 'Re-generate Podcast';
+                    podcastButton.classList.remove('btn-outline-secondary');
+                    podcastButton.classList.add('btn-outline-success');
+                }
+            }
+            if (data.chat_history && data.chat_history.length > 0) {
+                chatHistory = data.chat_history;
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.innerHTML = ''; // Clear existing messages
+                chatHistory.forEach(item => {
+                    // Adapt the old format to the new one for display
+                    const sender = item.role === 'model' ? 'assistant' : 'user';
+                    const message = Array.isArray(item.parts) ? item.parts.join(' ') : item.parts;
+                    appendChatMessage(message, sender);
+                });
             }
         });
 }
@@ -662,8 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    message: userMessage,
-                    history: chatHistory
+                    message: userMessage
                 }),
             });
 
@@ -678,8 +699,10 @@ document.addEventListener('DOMContentLoaded', () => {
             assistantMessageContent.innerHTML = converter.makeHtml(assistantResponse);
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
-            // Add to history
-            chatHistory.push({ user: userMessage, assistant: assistantResponse });
+            // History is now managed on the backend, but we can push to the local
+            // copy to keep the UI in sync without another fetch.
+            chatHistory.push({ role: 'user', parts: [userMessage] });
+            chatHistory.push({ role: 'model', parts: [assistantResponse] });
 
         } catch (error) {
             console.error('Chat error:', error);
