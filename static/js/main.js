@@ -697,7 +697,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.querySelector('body.settings-page')) {
         const playButtons = document.querySelectorAll('.play-sample-button');
         let currentAudio = null;
-        let originalButtonIcon = null;
 
         playButtons.forEach(button => {
             button.addEventListener('click', () => {
@@ -705,15 +704,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const select = document.getElementById(targetId);
                 const voice = select.value;
                 const icon = button.querySelector('i');
-                originalButtonIcon = icon.className;
+                const playIconClass = 'bi bi-volume-up-fill';
 
                 // Stop any currently playing audio
                 if (currentAudio && !currentAudio.paused) {
                     currentAudio.pause();
                     currentAudio.currentTime = 0;
-                     const previousButton = document.querySelector('.playing');
-                    if(previousButton) {
-                        previousButton.querySelector('i').className = originalButtonIcon;
+                    const previousButton = document.querySelector('.playing');
+                    if (previousButton) {
+                        previousButton.querySelector('i').className = playIconClass;
                         previousButton.classList.remove('playing');
                     }
                 }
@@ -721,7 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // If clicking the same button that is playing, just stop it.
                 if (button.classList.contains('playing')) {
                     button.classList.remove('playing');
-                    icon.className = originalButtonIcon;
+                    icon.className = playIconClass;
                     currentAudio = null;
                     return;
                 }
@@ -752,14 +751,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     currentAudio.addEventListener('ended', () => {
                         button.classList.remove('playing');
-                        icon.className = originalButtonIcon;
+                        icon.className = playIconClass;
                         currentAudio = null;
                     });
                 })
                 .catch(error => {
                     console.error('Error playing voice sample:', error);
                     alert('Failed to play voice sample. See console for details.');
-                    icon.className = originalButtonIcon;
+                    icon.className = playIconClass;
                     button.disabled = false;
                 });
             });
