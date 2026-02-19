@@ -74,6 +74,9 @@ def upload_file():
         return redirect(request.url)
     file = request.files['file']
     folder_id = request.form.get('folder_id')
+    upload_to_ragflow = request.form.get('upload_to_ragflow')
+    ragflow_dataset = request.form.get('ragflow_dataset')
+    
     if file.filename == '' or not allowed_file(file.filename):
         return redirect(request.url)
 
@@ -88,6 +91,25 @@ def upload_file():
         new_file.folder_id = folder_id
     db.session.add(new_file)
     db.session.commit()
+
+    # If user selected to upload to Ragflow
+    if upload_to_ragflow == 'on' and ragflow_dataset:
+        try:
+            settings = get_settings()
+            client = get_ragflow_client(settings)
+            if client:
+                # Save text as markdown file
+                markdown_content = f"# {filename}\n\n{text}"
+                temp_md = f"/tmp/{filename.rsplit('.', 1)[0]}.md"
+                with open(temp_md, 'w') as f:
+                    f.write(markdown_content)
+                
+                # Upload to Ragflow
+                result = client.request('POST', f'/datasets/{ragflow_dataset}/documents', 
+                    files={'file': open(temp_md, 'rb')})
+                os.remove(temp_md)
+        except Exception as e:
+            app.logger.error(f"Failed to upload to Ragflow: {e}")
 
     return redirect(url_for('index'))
 
