@@ -3,162 +3,304 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paper to Podcast</title>
+    <title>AudioPaper</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div id="app-container" class="container-fluid">
-        <div class="row">
-            <nav id="left-column" class="col-md-3 col-lg-2 d-md-block sidebar">
-                <div class="position-sticky pt-3 d-flex flex-column h-100">
-                    <div class="sidebar-header px-3 mb-3">
-                        <button class="btn btn-sm btn-ghost" id="sidebar-toggle" title="Toggle Sidebar">
-                            <i class="bi bi-layout-sidebar-inset-reverse"></i>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <span>AudioPaper</span>
+                </div>
+                <a href="{{ url_for('settings') }}" class="btn btn-ghost">
+                    <i class="bi bi-gear"></i>
+                </a>
+            </div>
+        </header>
+
+        <main class="main-content">
+            {% if not current_file %}
+            <!-- Empty State / Upload -->
+            <div class="upload-section">
+                <div class="upload-card">
+                    <div class="upload-icon">
+                        <i class="bi bi-file-earmark-pdf"></i>
+                    </div>
+                    <h2>Upload a Research Paper</h2>
+                    <p>Drop your PDF here or click to browse</p>
+                    <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+                        <input type="file" name="file" id="file-input" accept="application/pdf" hidden>
+                        <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file-input').click()">
+                            <i class="bi bi-upload"></i>
+                            Choose PDF
                         </button>
-                        <h1 class="h4">AudioPaper</h1>
+                    </form>
+                    <p class="upload-hint">Supported: PDF files</p>
+                </div>
+            </div>
+            {% else %}
+            <!-- Workflow View -->
+            <div class="workflow-container">
+                <!-- File Info Bar -->
+                <div class="file-info-bar">
+                    <div class="file-details">
+                        <i class="bi bi-file-earmark-pdf"></i>
+                        <span class="filename">{{ current_file.filename }}</span>
                     </div>
-
-                    <div class="px-3 mb-3">
-                        <form action="/upload" method="post" enctype="multipart/form-data">
-                             <label for="folder_id_upload" class="form-label small">Upload to Folder</label>
-                             <select class="form-select form-select-sm mb-2" name="folder_id" id="folder_id_upload">
-                                <option value="">(No Folder)</option>
-                                {% for folder in folders %}
-                                <option value="{{ folder.id }}">{{ folder.name }}</option>
-                                {% endfor %}
-                            </select>
-                            <input type="file" name="file" class="form-control form-control-sm" accept="application/pdf" onchange="this.form.submit()">
-                        </form>
+                    <div class="file-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="window.location.href='/'">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
                     </div>
+                </div>
 
-                    <hr>
-
-                    <div class="d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                        <h6 class="text-uppercase">Library</h6>
-                        <form action="/create_folder" method="post" class="d-flex">
-                            <input type="text" name="folder_name" class="form-control form-control-sm me-2" placeholder="New Folder..." required>
-                            <button class="btn btn-sm btn-secondary" type="submit" title="Create New Folder"><i class="bi bi-plus-lg"></i></button>
-                        </form>
+                <!-- Step Indicator -->
+                <div class="steps-indicator">
+                    <div class="step {% if current_file.text %}completed{% elif current_file %}active{% endif %}">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Ingest</div>
                     </div>
-
-                    <div id="file-list" class="flex-grow-1">
-                        <ul class="nav flex-column" id="root-file-list">
-                             {% for folder in folders %}
-                                <li class="nav-item folder-container" id="folder-item-{{ folder.id }}">
-                                    <div class="d-flex justify-content-between align-items-center folder-item">
-                                        <a class="nav-link d-flex align-items-center" href="#">
-                                            <i class="bi bi-chevron-right me-2 folder-toggle"></i>
-                                            <i class="bi bi-folder-fill me-2"></i>
-                                            <strong class="folder-name">{{ folder.name }}</strong>
-                                        </a>
-                                        <div class="dropdown">
-                                            <button class="btn btn-sm btn-ghost" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                                <i class="bi bi-three-dots-vertical"></i>
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                <li><a class="dropdown-item folder-action-button" href="#" data-action="renameFolder" data-id="{{ folder.id }}" data-name="{{ folder.name }}">Rename</a></li>
-                                                <li><a class="dropdown-item folder-action-button" href="#" data-action="deleteFolder" data-id="{{ folder.id }}">Delete</a></li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    <ul class="nav flex-column ms-3 collapse" id="folder-list-{{ folder.id }}">
-                                        {% for file in folder.files %}
-                                        {% include 'file_item.html' %}
-                                        {% endfor %}
-                                    </ul>
-                                </li>
-                            {% endfor %}
-                            {% for file in files_without_folder %}
-                                {# This is a bit of a hack. The root-file-list is the parent, but files are also li items. #}
-                                {# So when moving a file to root, it should just be appended to the 'root-file-list' ul. #}
-                                {% include 'file_item.html' %}
-                            {% endfor %}
-                        </ul>
+                    <div class="step-line"></div>
+                    <div class="step {% if current_file.summary %}completed{% endif %}">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Summarize</div>
                     </div>
+                    <div class="step-line"></div>
+                    <div class="step {% if current_file.transcript %}completed{% endif %}">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Script</div>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step {% if audio_exists %}completed{% endif %}">
+                        <div class="step-number">4</div>
+                        <div class="step-label">Generate</div>
+                    </div>
+                </div>
 
-                    <div class="sidebar-footer mt-auto p-3">
-                         <a href="{{ url_for('settings') }}" class="btn btn-outline-secondary w-100">
-                            <i class="bi bi-gear-fill me-2"></i>
-                            Settings
+                <!-- Main Workflow Area -->
+                <div class="workflow-content">
+                    <!-- Step 1: Ingest (Show extracted text) -->
+                    {% if current_file.text and not current_file.summary %}
+                    <div class="workflow-step">
+                        <div class="step-header">
+                            <h3><span class="step-num">1</span> Document Ingested</h3>
+                            <p class="step-desc">Your PDF has been processed. Ready to summarize.</p>
+                        </div>
+                        <div class="step-content">
+                            <button class="btn btn-primary btn-lg w-100" onclick="generateSummary()">
+                                <i class="bi bi-lightning"></i>
+                                Generate Summary
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Step 2: Summary -->
+                    {% if current_file.summary and not current_file.transcript %}
+                    <div class="workflow-step">
+                        <div class="step-header">
+                            <h3><span class="step-num">2</span> Summary</h3>
+                            <button class="btn btn-sm btn-ghost" onclick="showSummary()">View</button>
+                        </div>
+                        <div class="step-content">
+                            <div class="summary-preview">
+                                {{ current_file.summary[:500] }}...
+                            </div>
+                            <button class="btn btn-primary btn-lg w-100 mt-3" onclick="generateTranscript()">
+                                <i class="bi bi-chat-dots"></i>
+                                Generate Podcast Script
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Step 3: Script -->
+                    {% if current_file.transcript and not audio_exists %}
+                    <div class="workflow-step">
+                        <div class="step-header">
+                            <h3><span class="step-num">3</span> Podcast Script</h3>
+                            <button class="btn btn-sm btn-ghost" onclick="showTranscript()">View/Edit</button>
+                        </div>
+                        <div class="step-content">
+                            <div class="transcript-preview">
+                                {{ current_file.transcript[:300] }}...
+                            </div>
+                            <button class="btn btn-primary btn-lg w-100 mt-3" onclick="generatePodcast()">
+                                <i class="bi bi-play-circle"></i>
+                                Generate Audio
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Step 4: Audio Ready -->
+                    {% if audio_exists %}
+                    <div class="workflow-step completed">
+                        <div class="step-header">
+                            <h3><span class="step-num">4</span> Audio Ready</h3>
+                        </div>
+                        <div class="step-content">
+                            <div class="audio-player">
+                                <audio controls class="w-100">
+                                    <source src="{{ url_for('generated_audio', filename='dialogue_' + current_file.id|string + '.mp3') }}" type="audio/mpeg">
+                                    Your browser does not support audio.
+                                </audio>
+                            </div>
+                            <div class="audio-actions">
+                                <a href="{{ url_for('generated_audio', filename='dialogue_' + current_file.id|string + '.mp3') }}" download class="btn btn-outline">
+                                    <i class="bi bi-download"></i>
+                                    Download
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Loading States -->
+                    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+                        <div class="spinner"></div>
+                        <p id="loading-text">Processing...</p>
+                    </div>
+                </div>
+
+                <!-- Sidebar: File Library -->
+                <div class="library-sidebar">
+                    <h4>Library</h4>
+                    <div class="library-list">
+                        {% for file in all_files %}
+                        <a href="/?file={{ file.id }}" class="library-item {% if file.id == current_file.id %}active{% endif %}">
+                            <i class="bi bi-file-earmark-pdf"></i>
+                            <span>{{ file.filename[:25] }}{% if file.filename|length > 25 %}...{% endif %}</span>
                         </a>
+                        {% endfor %}
                     </div>
+                    <button class="btn btn-outline w-100 mt-3" onclick="window.location.href='/'">
+                        <i class="bi bi-plus-lg"></i>
+                        New Upload
+                    </button>
                 </div>
-            </nav>
+            </div>
+            {% endif %}
+        </main>
+    </div>
 
-            <main id="main-content" class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content d-flex flex-column">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 id="main-content-title" class="h2">Select a file to view</h1>
-                </div>
+    <!-- Modals -->
+    <div class="modal-overlay" id="summary-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Summary</h3>
+                <button class="btn btn-ghost" onclick="closeModal('summary-modal')">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="summary-text">{{ current_file.summary if current_file.summary else 'No summary yet.' }}</p>
+            </div>
+        </div>
+    </div>
 
-                <!-- Tab navigation -->
-                <ul class="nav nav-tabs" id="myTab" role="tablist" style="display: none;">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="document-tab" data-bs-toggle="tab" data-bs-target="#document-tab-pane" type="button" role="tab" aria-controls="document-tab-pane" aria-selected="true">Document</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-tab-pane" type="button" role="tab" aria-controls="summary-tab-pane" aria-selected="false">Summary</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="transcript-tab" data-bs-toggle="tab" data-bs-target="#transcript-tab-pane" type="button" role="tab" aria-controls="transcript-tab-pane" aria-selected="false">Transcript</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat-tab-pane" type="button" role="tab" aria-controls="chat-tab-pane" aria-selected="false">Chat</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="figures-tab" data-bs-toggle="tab" data-bs-target="#figures-tab-pane" type="button" role="tab" aria-controls="figures-tab-pane" aria-selected="false">Figures</button>
-                    </li>
-                </ul>
-
-                <!-- Tab content -->
-                <div class="tab-content flex-grow-1" id="myTabContent">
-                    <div class="tab-pane fade show active" id="document-tab-pane" role="tabpanel" aria-labelledby="document-tab">
-                        <div id="pdf-viewer" class="border text-center mt-2">
-                            <div id="pagination-controls" class="p-2" style="display: none;">
-                                <button id="prev" class="btn btn-secondary">Previous</button>
-                                <span>Page: <span id="page_num"></span> / <span id="page_count"></span></span>
-                                <button id="next" class="btn btn-secondary">Next</button>
-                            </div>
-                            <canvas id="pdf-canvas"></canvas>
-                        </div>
-                    </div>
-                    <div class="tab-pane fade p-3" id="summary-tab-pane" role="tabpanel" aria-labelledby="summary-tab">
-                        <div id="summary-content"></div>
-                    </div>
-                    <div class="tab-pane fade p-3" id="transcript-tab-pane" role="tabpanel" aria-labelledby="transcript-tab">
-                        <div id="transcript-content"></div>
-                    </div>
-                    <div class="tab-pane fade" id="chat-tab-pane" role="tabpanel" aria-labelledby="chat-tab">
-                        <div class="d-flex flex-column h-100 p-3">
-                            <div id="chat-messages" class="flex-grow-1 mb-3">
-                                <!-- Chat messages will be appended here -->
-                                <div class="text-center text-muted">Ask a question to get started.</div>
-                            </div>
-                            <form id="chat-form" class="d-flex">
-                                <input type="text" id="chat-input" class="form-control me-2" placeholder="Ask a question about the document..." autocomplete="off" required>
-                                <button type="submit" class="btn btn-primary"><i class="bi bi-send-fill"></i></button>
-                            </form>
-                        </div>
-                    </div>
-                    <div class="tab-pane fade p-3" id="figures-tab-pane" role="tabpanel" aria-labelledby="figures-tab">
-                        <div id="figures-container" class="row"></div>
-                    </div>
-                </div>
-
-
-                <div class="mt-auto p-3 bg-light border-top">
-                    <audio id="audio-player" class="w-100" controls>
-                        Your browser does not support the audio element.
-                    </audio>
-                </div>
-            </main>
+    <div class="modal-overlay" id="transcript-modal" style="display: none;">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3>Podcast Script</h3>
+                <button class="btn btn-ghost" onclick="closeModal('transcript-modal')">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <textarea class="form-control" id="transcript-edit" rows="15">{{ current_file.transcript if current_file.transcript else '' }}</textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="saveAndGenerate()">
+                    <i class="bi bi-play-circle"></i>
+                    Save & Generate Audio
+                </button>
+            </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // File input handler
+        document.getElementById('file-input')?.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                document.getElementById('upload-form').submit();
+            }
+        });
+
+        // Workflow functions
+        function generateSummary() {
+            showLoading('Generating summary...');
+            fetch('/summarize_file/{{ current_file.id }}', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => pollTask(data.task_id, 'summary'));
+        }
+
+        function generateTranscript() {
+            showLoading('Creating podcast script...');
+            fetch('/generate_transcript/{{ current_file.id }}', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => pollTask(data.task_id, 'transcript'));
+        }
+
+        function generatePodcast() {
+            showLoading('Generating audio...');
+            fetch('/generate_podcast/{{ current_file.id }}', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => pollTask(data.task_id, 'podcast'));
+        }
+
+        function showSummary() {
+            document.getElementById('summary-modal').style.display = 'flex';
+        }
+
+        function showTranscript() {
+            document.getElementById('transcript-modal').style.display = 'flex';
+        }
+
+        function saveAndGenerate() {
+            const transcript = document.getElementById('transcript-edit').value;
+            // TODO: Save transcript edits if needed
+            closeModal('transcript-modal');
+            generatePodcast();
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        function showLoading(text) {
+            document.getElementById('loading-text').textContent = text;
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        function pollTask(taskId, type) {
+            const interval = setInterval(() => {
+                fetch(`/{{ type }}_status/${taskId}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'complete') {
+                            clearInterval(interval);
+                            hideLoading();
+                            window.location.reload();
+                        } else if (data.status === 'error') {
+                            clearInterval(interval);
+                            hideLoading();
+                            alert('Error: ' + (data.result?.error || 'Unknown error'));
+                        }
+                    });
+            }, 2000);
+        }
+    </script>
 </body>
 </html>

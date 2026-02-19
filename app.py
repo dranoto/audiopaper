@@ -24,14 +24,6 @@ from services import (
     generate_text_completion,
 )
 
-# Try to import Google GenAI for text generation (optional)
-try:
-    from google import genai
-    from google.genai import types
-    GENAI_AVAILABLE = True
-except ImportError:
-    GENAI_AVAILABLE = False
-
 # --- App and DB Setup ---
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -49,24 +41,22 @@ os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
 # --- Flask Routes ---
 @app.route('/')
 def index():
-    folders = Folder.query.all()
-    files_without_folder = PDFFile.query.filter_by(folder_id=None).all()
-
-    # Check for audio file existence for all files
-
-    def _set_audio_exists(file_obj):
-        mp3_filename = f"dialogue_{file_obj.id}.mp3"
+    # Get optional file parameter
+    file_id = request.args.get('file', type=int)
+    current_file = PDFFile.query.get(file_id) if file_id else None
+    
+    # Get all files for library
+    all_files = PDFFile.query.order_by(PDFFile.id.desc()).all()
+    
+    # Check for audio file existence
+    for file in all_files:
+        mp3_filename = f"dialogue_{file.id}.mp3"
         mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
-        file_obj.audio_exists = os.path.exists(mp3_filepath)
+        file.audio_exists = os.path.exists(mp3_filepath)
 
-    for file in files_without_folder:
-        _set_audio_exists(file)
-
-    for folder in folders:
-        for file in folder.files:
-            _set_audio_exists(file)
-
-    return render_template('index.html', folders=folders, files_without_folder=files_without_folder)
+    return render_template('index.html', 
+                          all_files=all_files,
+                          current_file=current_file)
 
 @app.route('/create_folder', methods=['POST'])
 def create_folder():
