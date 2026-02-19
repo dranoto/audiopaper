@@ -38,7 +38,7 @@ class RagflowClient:
         return docs, result.get('data', {}).get('total', 0)
     
     def _enrich_with_pubmed_titles(self, docs):
-        """Fetch human-readable titles from PubMed for PMC files"""
+        """Fetch human-readable titles and publication dates from PubMed for PMC files"""
         # Extract PMIDs from file names like "PMC12527568.md"
         pmids = []
         for doc in docs:
@@ -62,35 +62,41 @@ class RagflowClient:
             )
             data = resp.json()
             
-            # Map PMID to title
-            title_map = {}
-            for pmid in pmid_list:
+            # Map PMID to title and pubdate
+           _map = {}
+            info for pmid in pmid_list:
                 try:
-                    title = data.get('result', {}).get(pmid, {}).get('title', '')
+                    result = data.get('result', {}).get(pmid, {})
+                    title = result.get('title', '')
+                    pubdate = result.get('pubdate', '')
                     if title:
                         # Truncate long titles
                         if len(title) > 80:
                             title = title[:77] + '...'
-                        title_map[pmid] = title
+                        info_map[pmid] = {'title': title, 'pubdate': pubdate}
                 except:
                     pass
             
-            # Update docs with titles
+            # Update docs with titles and dates
             for doc in docs:
                 name = doc.get('name', '')
                 if name.startswith('PMC') and name.endswith('.md'):
                     pmid = name[3:-3]
-                    if pmid in title_map:
-                        doc['title'] = title_map[pmid]
+                    if pmid in info_map:
+                        doc['title'] = info_map[pmid]['title']
+                        doc['pubdate'] = info_map[pmid]['pubdate']
                     else:
-                        doc['title'] = name  # Fallback to filename
+                        doc['title'] = name
+                        doc['pubdate'] = ''
                 else:
-                    doc['title'] = name
+                    doc['title'] = doc.get('name', '')
+                    doc['pubdate'] = ''
                     
         except Exception as e:
             # If PubMed lookup fails, just use filename
             for doc in docs:
                 doc['title'] = doc.get('name', '')
+                doc['pubdate'] = ''
         
         return docs
     

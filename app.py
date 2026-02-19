@@ -221,13 +221,23 @@ def _run_transcript_generation(app, task_id, file_id):
                 raise Exception("NanoGPT text client not initialized. Please set API key in settings.")
 
             transcript_model_name = settings.transcript_model
+            
+            # Add length guidance to prompt
+            length_guidance = {
+                'short': 'Keep the script brief, approximately 2-3 minutes of dialogue.',
+                'medium': 'Create a moderate-length script, approximately 5-7 minutes of dialogue.',
+                'long': 'Create a comprehensive, detailed script approximately 10+ minutes of dialogue.'
+            }
+            length_instruction = length_guidance.get(settings.transcript_length, length_guidance['medium'])
+            full_prompt = f"{settings.transcript_prompt}\n\n{length_instruction}"
+            
             app.logger.info(f"Task {task_id}: Generating transcript with {transcript_model_name}...")
             
             transcript_text = generate_text_with_file(
                 app.text_client,
                 transcript_model_name,
                 pdf_file.text,
-                settings.transcript_prompt,
+                full_prompt,
                 "You are a helpful research assistant that creates engaging podcast scripts from documents."
             )
             
@@ -480,6 +490,7 @@ def settings():
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
         settings.summary_prompt = request.form.get('summary_prompt')
         settings.transcript_prompt = request.form.get('transcript_prompt')
+        settings.transcript_length = request.form.get('transcript_length')
         db.session.commit()
         init_tts_client(app)
         init_text_client(app)

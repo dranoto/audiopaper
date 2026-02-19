@@ -85,6 +85,13 @@
                                 <label for="transcript_prompt" class="form-label">Transcript Prompt</label>
                                 <textarea class="form-control" id="transcript_prompt" name="transcript_prompt" rows="5">{{ settings.transcript_prompt }}</textarea>
                             </div>
+                            <div class="mb-3">
+                                <label for="transcript_length" class="form-label">Podcast Length</label>
+                                <select class="form-select" id="transcript_length" name="transcript_length">
+                                    <option value="short" {% if settings.transcript_length == 'short' %}selected{% endif %}>Short (2-3 min)</option>
+                                    <option value="medium" {% if settings.transcript_length == 'medium' or not settings.transcript_length %}selected{% endif %}>Medium (5-7 min)</option>
+                                    <option value="long" {% if settings.transcript_length == 'long' %}selected{% endif %}>Long (10+ min)</option>
+                                </select>
                             <hr>
                             <h3>Text-to-Speech Voices</h3>
                             <div class="mb-3">

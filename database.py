@@ -56,6 +56,7 @@ class Settings(db.Model):
         "The Host should ask engaging questions, and the Expert should explain the key concepts from the document clearly.",
         "Start each line with the speaker's name followed by a colon (e.g., \"Host: ...\")."
     ]))
+    transcript_length = db.Column(db.String(20), nullable=False, default='medium')  # short, medium, long
 
     def __repr__(self):
         return f'<Settings {self.id}>'

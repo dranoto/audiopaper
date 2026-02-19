@@ -109,8 +109,8 @@
                             <div class="document-info">
                                 <h4>${doc.title || doc.name || 'Untitled'}</h4>
                                 <p>
+                                    <span><i class="bi bi-calendar"></i> ${doc.pubdate || ''}</span>
                                     <span><i class="bi bi-collection"></i> ${doc.chunk_count || 0} chunks</span>
-                                    <span><i class="bi bi-hdd"></i> ${formatSize(doc.size)}</span>
                                 </p>
                             </div>
                             <button class="btn btn-primary btn-sm" onclick="importDoc('${datasetId}', '${doc.id}', '${doc.name}')">
