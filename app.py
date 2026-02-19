@@ -228,7 +228,8 @@ def _run_transcript_generation(app, task_id, file_id):
                 'medium': 'Create a moderate-length script, approximately 5-7 minutes of dialogue.',
                 'long': 'Create a comprehensive, detailed script approximately 10+ minutes of dialogue.'
             }
-            length_instruction = length_guidance.get(settings.transcript_length, length_guidance['medium'])
+            transcript_len = getattr(settings, 'transcript_length', 'medium')
+            length_instruction = length_guidance.get(transcript_len, length_guidance['medium'])
             full_prompt = f"{settings.transcript_prompt}\n\n{length_instruction}"
             
             app.logger.info(f"Task {task_id}: Generating transcript with {transcript_model_name}...")
@@ -490,7 +491,9 @@ def settings():
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
         settings.summary_prompt = request.form.get('summary_prompt')
         settings.transcript_prompt = request.form.get('transcript_prompt')
-        settings.transcript_length = request.form.get('transcript_length')
+        # Handle missing transcript_length column for older databases
+        if hasattr(settings, 'transcript_length'):
+            settings.transcript_length = request.form.get('transcript_length')
         db.session.commit()
         init_tts_client(app)
         init_text_client(app)

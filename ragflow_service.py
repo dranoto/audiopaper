@@ -63,8 +63,8 @@ class RagflowClient:
             data = resp.json()
             
             # Map PMID to title and pubdate
-           _map = {}
-            info for pmid in pmid_list:
+            info_map = {}
+            for pmid in pmid_list:
                 try:
                     result = data.get('result', {}).get(pmid, {})
                     title = result.get('title', '')
