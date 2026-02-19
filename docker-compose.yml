@@ -8,7 +8,7 @@ services:
       - ./uploads:/app/uploads
       - ./generated_audio:/app/generated_audio
       - ./static/figures:/app/static/figures
-      - ./instance:/app/instance
+      - ./data:/app/instance
     env_file:
       - .env
     environment:

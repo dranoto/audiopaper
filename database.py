@@ -20,9 +20,10 @@ class PDFFile(db.Model):
     captions = db.Column(db.Text)
     summary = db.Column(db.Text, nullable=True)
     transcript = db.Column(db.Text, nullable=True)
-    gemini_file_id = db.Column(db.String(100), nullable=True)
     chat_history = db.Column(db.Text, nullable=True)  # Store as JSON string
     folder_id = db.Column(db.Integer, db.ForeignKey('folder.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
     def __repr__(self):
         return f'<PDFFile {self.filename}>'
@@ -56,8 +57,7 @@ class Settings(db.Model):
         "The Host should ask engaging questions, and the Expert should explain the key concepts from the document clearly.",
         "Start each line with the speaker's name followed by a colon (e.g., \"Host: ...\")."
     ]))
-
-    # Note: transcript_length column may not exist in older databases
+    transcript_length = db.Column(db.String(20), nullable=False, default='medium')
 
     def __repr__(self):
         return f'<Settings {self.id}>'

@@ -491,9 +491,7 @@ def settings():
         settings.tts_expert_voice = request.form.get('tts_expert_voice')
         settings.summary_prompt = request.form.get('summary_prompt')
         settings.transcript_prompt = request.form.get('transcript_prompt')
-        # Handle missing transcript_length column for older databases
-        if hasattr(settings, 'transcript_length'):
-            settings.transcript_length = request.form.get('transcript_length')
+        settings.transcript_length = request.form.get('transcript_length')
         db.session.commit()
         init_tts_client(app)
         init_text_client(app)
