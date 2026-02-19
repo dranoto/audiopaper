@@ -166,6 +166,19 @@
                     </div>
                     {% endif %}
 
+                    <!-- Chat Section -->
+                    <div class="workflow-step">
+                        <div class="step-header">
+                            <h3><i class="bi bi-chat-dots"></i> Chat with Document</h3>
+                        </div>
+                        <div class="step-content">
+                            <button class="btn btn-outline w-100" onclick="openChat()">
+                                <i class="bi bi-chat"></i>
+                                Open Chat
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Loading States -->
                     <div id="loading-overlay" class="loading-overlay" style="display: none;">
                         <div class="spinner"></div>
@@ -225,6 +238,42 @@
                     <i class="bi bi-play-circle"></i>
                     Save & Generate Audio
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Modal -->
+    <div class="modal-overlay" id="chat-modal" style="display: none;">
+        <div class="modal-content modal-lg" style="max-width: 700px; height: 80vh;">
+            <div class="modal-header">
+                <h3><i class="bi bi-chat-dots"></i> Chat with Document</h3>
+                <button class="btn btn-ghost" onclick="closeModal('chat-modal')">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; padding: 0;">
+                <div class="chat-options" style="padding: 12px 20px; border-bottom: 1px solid var(--border);">
+                    <label class="chat-toggle">
+                        <input type="checkbox" id="ragflow-toggle">
+                        <span>Include Ragflow context</span>
+                    </label>
+                    <select id="ragflow-dataset" class="form-select form-select-sm" style="width: auto; display: inline-block;">
+                        <option value="">Loading datasets...</option>
+                    </select>
+                </div>
+                <div id="chat-messages" class="chat-messages" style="flex: 1; overflow-y: auto; padding: 20px;">
+                    <div class="chat-message assistant">
+                        <p>Ask me anything about this document. I can also pull relevant context from your Ragflow knowledge base if enabled.</p>
+                    </div>
+                </div>
+                <div class="chat-input-container" style="padding: 16px 20px; border-top: 1px solid var(--border);">
+                    <div class="input-group">
+                        <input type="text" id="chat-input" class="form-control" placeholder="Ask a question about this document..." onkeypress="if(event.key==='Enter')sendChat()">
+                        <button class="btn btn-primary" onclick="sendChat()">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -305,6 +354,88 @@
                         }
                     });
             }, 2000);
+        }
+
+        // Chat functions
+        let chatFileId = {{ current_file.id if current_file else 'null' }};
+        
+        function openChat() {
+            document.getElementById('chat-modal').style.display = 'flex';
+            loadRagflowDatasets();
+        }
+
+        function loadRagflowDatasets() {
+            fetch('/ragflow/datasets')
+                .then(r => r.json())
+                .then(data => {
+                    const select = document.getElementById('ragflow-dataset');
+                    if (data.error) {
+                        select.innerHTML = '<option value="">Ragflow not configured</option>';
+                        return;
+                    }
+                    select.innerHTML = '<option value="">Select dataset...</option>' +
+                        data.datasets.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+                })
+                .catch(() => {
+                    document.getElementById('ragflow-dataset').innerHTML = '<option value="">Ragflow error</option>';
+                });
+        }
+
+        function sendChat() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const useRagflow = document.getElementById('ragflow-toggle').checked;
+            const datasetId = document.getElementById('ragflow-dataset').value;
+
+            // Add user message to chat
+            addMessage('user', message);
+            input.value = '';
+
+            // Show typing indicator
+            const messagesDiv = document.getElementById('chat-messages');
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'chat-message assistant typing';
+            typingDiv.innerHTML = '<p><i class="bi bi-three-dots"></i> Thinking...</p>';
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            fetch(`/chat_file/${chatFileId}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    message: message,
+                    use_ragflow: useRagflow,
+                    ragflow_dataset_id: datasetId || null
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                typingDiv.remove();
+                if (data.error) {
+                    addMessage('assistant', 'Error: ' + data.error);
+                } else {
+                    if (data.ragflow_used) {
+                        addMessage('assistant', data.message + '\n\n<small><i class="bi bi-info-circle"></i> Used Ragflow context</small>');
+                    } else {
+                        addMessage('assistant', data.message);
+                    }
+                }
+            })
+            .catch(err => {
+                typingDiv.remove();
+                addMessage('assistant', 'Error: ' + err);
+            });
+        }
+
+        function addMessage(role, content) {
+            const messagesDiv = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.className = `chat-message ${role}`;
+            div.innerHTML = `<p>${content.replace(/\n/g, '<br>')}</p>`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
     </script>
 </body>

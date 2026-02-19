@@ -366,7 +366,10 @@ def chat_with_file(file_id):
     if not data or 'message' not in data:
         return jsonify({'error': 'Message is required in the request body.'}), 400
 
-    question = data['message']
+    question = data.get('message')
+    use_ragflow = data.get('use_ragflow', False)
+    ragflow_dataset_id = data.get('ragflow_dataset_id')  # Optional: specific dataset
+    
     # Load history from the database
     history = json.loads(pdf_file.chat_history or '[]')
 
@@ -376,20 +379,59 @@ def chat_with_file(file_id):
     settings = get_settings()
     model_name = settings.chat_model
 
+    # Build base system prompt
+    system_prompt = "You are a helpful research assistant. Your task is to answer questions based on the provided document content."
+    
+    # Add Ragflow context if enabled
+    ragflow_context = ""
+    if use_ragflow:
+        try:
+            client = get_ragflow_client(settings)
+            if client:
+                # Get datasets - use specific one or first available
+                datasets = client.list_datasets()
+                if datasets:
+                    target_dataset = ragflow_dataset_id
+                    if not target_dataset and settings.ragflow_default_dataset:
+                        target_dataset = settings.ragflow_default_dataset
+                    if not target_dataset:
+                        target_dataset = datasets[0].get('id')
+                    
+                    if target_dataset:
+                        # Query Ragflow for relevant context
+                        result = client.request('POST', f'/datasets/{target_dataset}/retrieval', json={
+                            'query': question,
+                            'top_k': 5
+                        })
+                        
+                        chunks = result.get('data', {}).get('chunks', [])
+                        if chunks:
+                            ragflow_context = "\n\n".join([
+                                f"[From related documents in knowledge base:]\n{c.get('content', '')}" 
+                                for c in chunks[:5]
+                            ])
+                            system_prompt += " You may also use relevant context from the attached knowledge base to provide better answers."
+        except Exception as e:
+            app.logger.warning(f"Ragflow retrieval failed: {e}")
+
     try:
         # Build conversation history in NanoGPT format
-        messages = [
-            {"role": "system", "content": "You are a helpful research assistant. Your task is to answer questions based solely on the content of the attached document. Do not use any external knowledge. If the answer cannot be found within the document, state that clearly."}
-        ]
+        messages = [{"role": "system", "content": system_prompt}]
         
-        # Add document content as context
+        # Build context section
+        context_parts = [f"Document content:\n{pdf_file.text}"]
+        if ragflow_context:
+            context_parts.append(ragflow_context)
+        
+        context_section = "\n\n---\n\n".join(context_parts)
+        
         messages.append({
             "role": "user", 
-            "content": f"Here is the document content:\n\n{pdf_file.text}\n\n---\n\nPlease answer questions about this document."
+            "content": f"{context_section}\n\n---\n\nPlease answer questions about this document."
         })
         
-        # Add chat history
-        for msg in history:
+        # Add chat history (last 6 messages to keep context manageable)
+        for msg in history[-6:]:
             role = msg.get('role', 'user')
             if role == 'model':
                 role = 'assistant'
@@ -412,7 +454,10 @@ def chat_with_file(file_id):
         pdf_file.chat_history = json.dumps(history)
         db.session.commit()
 
-        return jsonify({'message': response_text})
+        return jsonify({
+            'message': response_text,
+            'ragflow_used': bool(ragflow_context)
+        })
     except Exception as e:
         app.logger.error(f"Chat generation failed for file_id {file_id}: {e}")
         return jsonify({'error': f'Could not generate a response. Details: {str(e)}'}), 500
@@ -665,6 +710,22 @@ def ragflow_browser():
         return render_template('ragflow_error.html', error=f"Failed to connect to Ragflow: {str(e)}")
     
     return render_template('ragflow.html', datasets=datasets)
+
+
+@app.route('/ragflow/datasets')
+def ragflow_datasets():
+    """List available datasets for chat integration"""
+    settings = get_settings()
+    client = get_ragflow_client(settings)
+    
+    if not client:
+        return jsonify({'error': 'Ragflow not configured'}), 400
+    
+    try:
+        datasets = client.list_datasets()
+        return jsonify({'datasets': [{'id': d.get('id'), 'name': d.get('name')} for d in datasets]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/ragflow/dataset/<dataset_id>')
