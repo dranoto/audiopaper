@@ -15,68 +15,21 @@
                 <div class="card">
                     <div class="card-header">
                         <h1>Settings</h1>
+                        <p class="text-muted mb-0">API keys and models are configured via .env file</p>
                     </div>
                     <div class="card-body">
                         <form action="{{ url_for('settings') }}" method="post">
-                            <div class="mb-3">
-                                <label for="gemini_api_key" class="form-label">Gemini API Key (legacy - not used)</label>
-                                <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key" value="{{ settings.gemini_api_key }}">
-                                <div class="form-text">Not currently used. Text generation now uses NanoGPT.</div>
+                            <!-- Configuration Reference - Read Only -->
+                            <div class="alert alert-info">
+                                <h5><i class="bi bi-info-circle"></i> Configuration</h5>
+                                <p class="mb-1"><strong>NanoGPT:</strong> Text generation (summaries, transcripts, chat)</p>
+                                <p class="mb-1"><strong>DeepInfra:</strong> Text-to-speech (Kokoro)</p>
+                                <p class="mb-1"><strong>Ragflow:</strong> Document browser</p>
+                                <p class="mb-0"><strong>Models:</strong> All configured in .env file</p>
                             </div>
-                            <div class="mb-3">
-                                <label for="nanogpt_api_key" class="form-label">NanoGPT API Key (for text generation)</label>
-                                <input type="password" class="form-control" id="nanogpt_api_key" name="nanogpt_api_key" value="{{ settings.nanogpt_api_key }}">
-                                <div class="form-text">Required for summaries, transcripts, and chat. Get one at https://nano-gpt.com</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="ragflow_url" class="form-label">Ragflow URL</label>
-                                <input type="text" class="form-control" id="ragflow_url" name="ragflow_url" value="{{ settings.ragflow_url }}" placeholder="https://rag.latour.live">
-                                <div class="form-text">Your self-hosted Ragflow instance URL</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="ragflow_api_key" class="form-label">Ragflow API Key</label>
-                                <input type="password" class="form-control" id="ragflow_api_key" name="ragflow_api_key" value="{{ settings.ragflow_api_key }}">
-                                <div class="form-text">Required for browsing and importing from Ragflow</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="deepinfra_api_key" class="form-label">DeepInfra API Key (for TTS)</label>
-                                <input type="password" class="form-control" id="deepinfra_api_key" name="deepinfra_api_key" value="{{ settings.deepinfra_api_key }}">
-                                <div class="form-text">Required for text-to-speech. Get one at https://deepinfra.com</div>
-                            </div>
+
                             <hr>
-                            <h3>Model Selection</h3>
-                            <div class="mb-3">
-                                <label for="summary_model" class="form-label">Summary Model</label>
-                                <select class="form-select" id="summary_model" name="summary_model">
-                                    {% for model in text_models %}
-                                        <option value="{{ model }}" {% if model == settings.summary_model %}selected{% endif %}>{{ model }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="transcript_model" class="form-label">Transcript Model</label>
-                                <select class="form-select" id="transcript_model" name="transcript_model">
-                                    {% for model in text_models %}
-                                        <option value="{{ model }}" {% if model == settings.transcript_model %}selected{% endif %}>{{ model }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="chat_model" class="form-label">Chat Model</label>
-                                <select class="form-select" id="chat_model" name="chat_model">
-                                    {% for model in text_models %}
-                                        <option value="{{ model }}" {% if model == settings.chat_model %}selected{% endif %}>{{ model }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                             <div class="mb-3">
-                                <label for="tts_model" class="form-label">Text-to-Speech Model</label>
-                                <select class="form-select" id="tts_model" name="tts_model">
-                                    {% for model in tts_models %}
-                                        <option value="{{ model }}" {% if model == settings.tts_model %}selected{% endif %}>{{ model }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
+                            <h3>Prompts</h3>
                             <div class="mb-3">
                                 <label for="summary_prompt" class="form-label">Summary Prompt</label>
                                 <textarea class="form-control" id="summary_prompt" name="summary_prompt" rows="3">{{ settings.summary_prompt }}</textarea>
@@ -85,6 +38,9 @@
                                 <label for="transcript_prompt" class="form-label">Transcript Prompt</label>
                                 <textarea class="form-control" id="transcript_prompt" name="transcript_prompt" rows="5">{{ settings.transcript_prompt }}</textarea>
                             </div>
+                            
+                            <hr>
+                            <h3>Podcast Settings</h3>
                             <div class="mb-3">
                                 <label for="transcript_length" class="form-label">Podcast Length</label>
                                 <select class="form-select" id="transcript_length" name="transcript_length">
@@ -92,8 +48,7 @@
                                     <option value="medium" {% if settings.transcript_length == 'medium' or not settings.transcript_length %}selected{% endif %}>Medium (5-7 min)</option>
                                     <option value="long" {% if settings.transcript_length == 'long' %}selected{% endif %}>Long (10+ min)</option>
                                 </select>
-                            <hr>
-                            <h3>Text-to-Speech Voices</h3>
+                            </div>
                             <div class="mb-3">
                                 <label for="tts_host_voice" class="form-label">Host Voice</label>
                                 <div class="input-group">
@@ -120,8 +75,10 @@
                                     </button>
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary">Save Settings</button>
-                            <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Home</a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i>
+                                Save Changes
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -129,7 +86,30 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // Voice sample playback
+        document.querySelectorAll('.play-sample-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const selectId = this.getAttribute('data-target-select');
+                const voice = document.getElementById(selectId).value;
+                
+                fetch('/play_voice_sample', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({voice: voice})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        return;
+                    }
+                    const audio = new Audio(data.audio_url);
+                    audio.play();
+                })
+                .catch(err => alert('Error: ' + err));
+            });
+        });
+    </script>
 </body>
 </html>

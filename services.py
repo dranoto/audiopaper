@@ -14,6 +14,15 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
+# --- Default settings from environment ---
+SUMMARY_MODEL = os.environ.get('SUMMARY_MODEL', 'openai/gpt-5.2')
+TRANSCRIPT_MODEL = os.environ.get('TRANSCRIPT_MODEL', 'openai/gpt-5.2')
+CHAT_MODEL = os.environ.get('CHAT_MODEL', 'openai/gpt-5.2')
+TTS_MODEL = os.environ.get('TTS_MODEL', 'hexgrad/Kokoro-82M')
+TTS_HOST_VOICE = os.environ.get('TTS_HOST_VOICE', 'af_bella')
+TTS_EXPERT_VOICE = os.environ.get('TTS_EXPERT_VOICE', 'am_onyx')
+TTS_LENGTH = os.environ.get('TTS_LENGTH', 'medium')
+
 # --- Global lists for models and voices ---
 available_text_models = []
 available_tts_models = []
@@ -148,12 +157,9 @@ def init_text_client(app_instance):
                     app_instance.logger.warning(f"Could not fetch models list: {e}")
                     # Default models if we can't fetch the list
                     available_text_models = [
-                        'openai/gpt-5.2',
-                        'openai/gpt-5',
-                        'openai/o4-mini',
-                        'anthropic/claude-sonnet-4-20250514',
-                        'google/gemini-2.5-pro',
-                        'deepseek/deepseek-chat'
+                        SUMMARY_MODEL,
+                        TRANSCRIPT_MODEL,
+                        CHAT_MODEL,
                     ]
             except Exception as e:
                 app_instance.text_client = None

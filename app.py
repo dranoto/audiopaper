@@ -498,31 +498,40 @@ def chat_with_file(file_id):
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
-    settings = get_settings()
+    from services import SUMMARY_MODEL, TRANSCRIPT_MODEL, CHAT_MODEL, TTS_HOST_VOICE, TTSTS_MODEL, TTS_EXPERT_VOICE, TTS_LENGTH
+    
+    s = get_settings()
+    
+    # Set defaults from environment
+    if not s.summary_model:
+        s.summary_model = SUMMARY_MODEL
+    if not s.transcript_model:
+        s.transcript_model = TRANSCRIPT_MODEL
+    if not s.chat_model:
+        s.chat_model = CHAT_MODEL
+    if not s.tts_model:
+        s.tts_model = TTS_MODEL
+    if not s.tts_host_voice:
+        s.tts_host_voice = TTS_HOST_VOICE
+    if not s.tts_expert_voice:
+        s.tts_expert_voice = TTS_EXPERT_VOICE
+    if not s.transcript_length:
+        s.transcript_length = TTS_LENGTH
+    
     if request.method == 'POST':
-        settings.gemini_api_key = request.form.get('gemini_api_key')
-        settings.nanogpt_api_key = request.form.get('nanogpt_api_key')
-        settings.deepinfra_api_key = request.form.get('deepinfra_api_key')
-        settings.ragflow_url = request.form.get('ragflow_url')
-        settings.ragflow_api_key = request.form.get('ragflow_api_key')
-        settings.summary_model = request.form.get('summary_model')
-        settings.transcript_model = request.form.get('transcript_model')
-        settings.chat_model = request.form.get('chat_model')
-        settings.tts_model = request.form.get('tts_model')
-        settings.tts_host_voice = request.form.get('tts_host_voice')
-        settings.tts_expert_voice = request.form.get('tts_expert_voice')
-        settings.summary_prompt = request.form.get('summary_prompt')
-        settings.transcript_prompt = request.form.get('transcript_prompt')
-        settings.transcript_length = request.form.get('transcript_length')
+        # Only save prompts - API keys and models come from .env
+        s.summary_prompt = request.form.get('summary_prompt')
+        s.transcript_prompt = request.form.get('transcript_prompt')
+        s.transcript_length = request.form.get('transcript_length', TTS_LENGTH)
         db.session.commit()
         init_tts_client(app)
         init_text_client(app)
         return redirect(url_for('settings'))
 
     return render_template('settings.html', 
-                           settings=settings,
-                           text_models=available_text_models,
-                           tts_models=available_tts_models,
+                           settings=s,
+                           text_models=[SUMMARY_MODEL, TRANSCRIPT_MODEL, CHAT_MODEL],
+                           tts_models=[TTS_MODEL],
                            voices=available_voices)
 
 # --- Static File Routes ---
