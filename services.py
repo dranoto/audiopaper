@@ -21,7 +21,7 @@ CHAT_MODEL = os.environ.get('CHAT_MODEL', 'openai/gpt-5.2')
 TTS_MODEL = os.environ.get('TTS_MODEL', 'hexgrad/Kokoro-82M')
 TTS_HOST_VOICE = os.environ.get('TTS_HOST_VOICE', 'af_bella')
 TTS_EXPERT_VOICE = os.environ.get('TTS_EXPERT_VOICE', 'am_onyx')
-TTS_LENGTH = os.environ.get('TTS_LENGTH', 'medium')
+TTS_LENGTH = os.environ.get('TTS_LENGTH', '')
 
 # --- Global lists for models and voices ---
 available_text_models = []

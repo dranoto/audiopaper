@@ -498,7 +498,7 @@ def chat_with_file(file_id):
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
-    from services import SUMMARY_MODEL, TRANSCRIPT_MODEL, CHAT_MODEL, TTS_HOST_VOICE, TTSTS_MODEL, TTS_EXPERT_VOICE, TTS_LENGTH
+    from services import SUMMARY_MODEL, TRANSCRIPT_MODEL, CHAT_MODEL, TTS_HOST_VOICE, TTS_MODEL, TTS_EXPERT_VOICE, TTS_LENGTH
     
     s = get_settings()
     
@@ -516,13 +516,13 @@ def settings():
     if not s.tts_expert_voice:
         s.tts_expert_voice = TTS_EXPERT_VOICE
     if not s.transcript_length:
-        s.transcript_length = TTS_LENGTH
+        s.transcript_length = "medium"
     
     if request.method == 'POST':
         # Only save prompts - API keys and models come from .env
         s.summary_prompt = request.form.get('summary_prompt')
         s.transcript_prompt = request.form.get('transcript_prompt')
-        s.transcript_length = request.form.get('transcript_length', TTS_LENGTH)
+        s.transcript_length = request.form.get('transcript_length', 'medium')
         db.session.commit()
         init_tts_client(app)
         init_text_client(app)
