@@ -3,9 +3,10 @@ import requests
 
 # Ragflow API Client
 class RagflowClient:
-    def __init__(self, url, api_key):
+    def __init__(self, url, api_key, allowed_datasets=None):
         self.url = url.rstrip('/')
         self.api_key = api_key
+        self.allowed_datasets = allowed_datasets or []
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': f'Bearer {api_key}',
@@ -20,7 +21,12 @@ class RagflowClient:
     
     def list_datasets(self):
         result = self.request('GET', '/datasets')
-        return result.get('data', [])
+        all_datasets = result.get('data', [])
+        
+        # Filter by allowed datasets if specified
+        if self.allowed_datasets:
+            return [d for d in all_datasets if d.get('name') in self.allowed_datasets]
+        return all_datasets
     
     def list_documents(self, dataset_id, page=1, size=50):
         result = self.request('GET', f'/datasets/{dataset_id}/documents?page={page}&size={size}')
@@ -60,8 +66,10 @@ def get_ragflow_client(settings):
     """Create Ragflow client from settings"""
     url = settings.ragflow_url or os.environ.get('RAGFLOW_URL')
     api_key = settings.ragflow_api_key or os.environ.get('RAGFLOW_API_KEY')
+    allowed_datasets_str = os.environ.get('RAGFLOW_ALLOWED_DATASETS', '')
+    allowed_datasets = [d.strip() for d in allowed_datasets_str.split(',') if d.strip()]
     
     if not url or not api_key:
         return None
     
-    return RagflowClient(url, api_key)
+    return RagflowClient(url, api_key, allowed_datasets)
