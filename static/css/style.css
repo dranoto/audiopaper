@@ -469,7 +469,7 @@ body {
     border-radius: var(--radius);
     width: 100%;
     max-width: 600px;
-    max-height: 80vh;
+    height: 80vh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -477,6 +477,7 @@ body {
 
 .modal-content.modal-lg {
     max-width: 800px;
+    height: 80vh;
 }
 
 .modal-header {

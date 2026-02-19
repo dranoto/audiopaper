@@ -39,22 +39,94 @@ class RagflowClient:
     
     def _enrich_with_pubmed_titles(self, docs):
         """Fetch human-readable titles and publication dates from PubMed for PMC files"""
-        # Extract PMIDs from file names like "PMC12527568.md"
-        pmids = []
+        # Extract PMCs from file names like "PMC12527568.md"
+        # Check both 'name' and 'location' fields
+        pmcs = []
         for doc in docs:
-            name = doc.get('name', '')
+            name = doc.get('name', '') or doc.get('location', '')
             if name.startswith('PMC') and name.endswith('.md'):
-                pmid = name[3:-3]  # Remove 'PMC' prefix and '.md' suffix
-                pmids.append((doc.get('id'), pmid))
+                pmc_id = name[3:-3]  # Remove 'PMC' prefix and '.md' suffix
+                pmcs.append((doc.get('id'), pmc_id))
         
-        if not pmids:
+        if not pmcs:
             return docs
         
-        # Batch fetch from PubMed (can handle multiple IDs)
-        pmid_list = [p[1] for p in pmids]
+        # Try to find PMID for each PMC using elink first, then search
+        pmc_to_pmid = {}
+        for doc_id, pmc_id in pmcs:
+            pmid = None
+            
+            # Method 1: Try elink (PMCID → PMID)
+            try:
+                resp = requests.get(
+                    f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi",
+                    params={
+                        'dbfrom': 'pmc',
+                        'linkname': 'pmc_pubmed',
+                        'id': pmc_id,
+                        'retmode': 'json'
+                    },
+                    timeout=10
+                )
+                data = resp.json()
+                links = data.get('linksets', [{}])[0].get('linksetdbs', [{}])
+                if links:
+                    pmids = links[0].get('links', [])
+                    if pmids:
+                        pmid = str(pmids[0])
+            except:
+                pass
+            
+            # Method 2: Search PubMed by PMCID if elink failed
+            if not pmid:
+                try:
+                    # Try direct PMID first (some PMC IDs are same as PMIDs)
+                    resp = requests.get(
+                        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+                        params={'db': 'pubmed', 'id': pmc_id, 'retmode': 'json'},
+                        timeout=10
+                    )
+                    data = resp.json()
+                    result = data.get('result', {}).get(pmc_id, {})
+                    if result.get('title'):
+                        pmid = pmc_id
+                except:
+                    pass
+            
+            # Method 3: Search PubMed by PMCID as term
+            if not pmid:
+                try:
+                    resp = requests.get(
+                        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+                        params={
+                            'db': 'pubmed',
+                            'term': f'{pmc_id}[pmcid]',
+                            'retmode': 'json',
+                            'retmax': 1
+                        },
+                        timeout=10
+                    )
+                    data = resp.json()
+                    ids = data.get('esearchresult', {}).get('idlist', [])
+                    if ids:
+                        pmid = ids[0]
+                except:
+                    pass
+            
+            if pmid:
+                pmc_to_pmid[pmc_id] = pmid
+        
+        if not pmc_to_pmid:
+            # Can't find PMIDs - just use filename
+            for doc in docs:
+                doc['title'] = doc.get('name', '')
+                doc['pubdate'] = ''
+            return docs
+        
+        # Now fetch titles using PMIDs
+        pmid_list = list(pmc_to_pmid.values())
         try:
-            # PubMed ESummary can handle multiple IDs
-            pmid_str = ','.join(pmid_list)
+            pmid_str = ','.join(pmid_list[:20])  # Limit batch size
             resp = requests.get(
                 f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
                 params={'db': 'pubmed', 'id': pmid_str, 'retmode': 'json'},
@@ -77,12 +149,13 @@ class RagflowClient:
                 except:
                     pass
             
-            # Update docs with titles and dates
+            # Update docs with titles and dates (reverse lookup PMC -> PMID -> info)
             for doc in docs:
                 name = doc.get('name', '')
                 if name.startswith('PMC') and name.endswith('.md'):
-                    pmid = name[3:-3]
-                    if pmid in info_map:
+                    pmc_id = name[3:-3]
+                    pmid = pmc_to_pmid.get(pmc_id)
+                    if pmid and pmid in info_map:
                         doc['title'] = info_map[pmid]['title']
                         doc['pubdate'] = info_map[pmid]['pubdate']
                     else:
@@ -93,7 +166,7 @@ class RagflowClient:
                     doc['pubdate'] = ''
                     
         except Exception as e:
-            # If PubMed lookup fails, just use filename
+            # If lookup fails, just use filename
             for doc in docs:
                 doc['title'] = doc.get('name', '')
                 doc['pubdate'] = ''
