@@ -19,9 +19,19 @@
                     <div class="card-body">
                         <form action="{{ url_for('settings') }}" method="post">
                             <div class="mb-3">
-                                <label for="gemini_api_key" class="form-label">Gemini API Key</label>
+                                <label for="gemini_api_key" class="form-label">Gemini API Key (legacy - not used)</label>
                                 <input type="password" class="form-control" id="gemini_api_key" name="gemini_api_key" value="{{ settings.gemini_api_key }}">
-                                <div class="form-text">If you leave this blank, the application will try to use the `GEMINI_API_KEY` environment variable.</div>
+                                <div class="form-text">Not currently used. Text generation now uses NanoGPT.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="nanogpt_api_key" class="form-label">NanoGPT API Key (for text generation)</label>
+                                <input type="password" class="form-control" id="nanogpt_api_key" name="nanogpt_api_key" value="{{ settings.nanogpt_api_key }}">
+                                <div class="form-text">Required for summaries, transcripts, and chat. Get one at https://nano-gpt.com</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="deepinfra_api_key" class="form-label">DeepInfra API Key (for TTS)</label>
+                                <input type="password" class="form-control" id="deepinfra_api_key" name="deepinfra_api_key" value="{{ settings.deepinfra_api_key }}">
+                                <div class="form-text">Required for text-to-speech. Get one at https://deepinfra.com</div>
                             </div>
                             <hr>
                             <h3>Model Selection</h3>
@@ -71,8 +81,8 @@
                                 <label for="tts_host_voice" class="form-label">Host Voice</label>
                                 <div class="input-group">
                                     <select class="form-select" id="tts_host_voice" name="tts_host_voice">
-                                        {% for voice in voices %}
-                                            <option value="{{ voice }}" {% if voice == settings.tts_host_voice %}selected{% endif %}>{{ voice }}</option>
+                                        {% for voice_id, voice_desc in voices %}
+                                            <option value="{{ voice_id }}" {% if voice_id == settings.tts_host_voice %}selected{% endif %}>{{ voice_desc }}</option>
                                         {% endfor %}
                                     </select>
                                     <button class="btn btn-outline-secondary play-sample-button" type="button" data-target-select="tts_host_voice">
@@ -84,8 +94,8 @@
                                 <label for="tts_expert_voice" class="form-label">Expert Voice</label>
                                 <div class="input-group">
                                     <select class="form-select" id="tts_expert_voice" name="tts_expert_voice">
-                                        {% for voice in voices %}
-                                            <option value="{{ voice }}" {% if voice == settings.tts_expert_voice %}selected{% endif %}>{{ voice }}</option>
+                                        {% for voice_id, voice_desc in voices %}
+                                            <option value="{{ voice_id }}" {% if voice_id == settings.tts_expert_voice %}selected{% endif %}>{{ voice_desc }}</option>
                                         {% endfor %}
                                     </select>
                                     <button class="btn btn-outline-secondary play-sample-button" type="button" data-target-select="tts_expert_voice">

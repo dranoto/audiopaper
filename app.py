@@ -4,21 +4,33 @@ import pathlib
 import re
 import uuid
 import threading
+import io
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
-from google.genai import types
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from database import db, init_db, Folder, PDFFile, Settings, get_settings, Task
 from services import (
-    init_gemini_client,
+    init_tts_client,
+    init_text_client,
     process_pdf,
     allowed_file,
     available_text_models,
     available_tts_models,
     available_voices,
     generate_voice_sample,
+    generate_podcast_audio,
+    generate_text_with_file,
+    generate_text_completion,
 )
+
+# Try to import Google GenAI for text generation (optional)
+try:
+    from google import genai
+    from google.genai import types
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
 
 # --- App and DB Setup ---
 app = Flask(__name__)
@@ -114,7 +126,7 @@ def _get_or_upload_file(app, pdf_file):
 
 
 def _run_summary_generation(app, task_id, file_id):
-    """Worker function to run summary generation in the background."""
+    """Worker function to run summary generation in the background using NanoGPT."""
     with app.app_context():
         try:
             task = Task.query.get(task_id)
@@ -125,21 +137,24 @@ def _run_summary_generation(app, task_id, file_id):
             pdf_file = PDFFile.query.get(file_id)
             settings = get_settings()
 
-            if not app.gemini_client:
-                raise Exception("Gemini client not initialized.")
+            if not hasattr(app, 'text_client') or not app.text_client:
+                raise Exception("NanoGPT text client not initialized. Please set API key in settings.")
 
-            uploaded_file = _get_or_upload_file(app, pdf_file)
-
+            # Use the extracted text from the PDF instead of uploading
             prompt = settings.summary_prompt
-            model_name = f"models/{settings.summary_model}"
+            model_name = settings.summary_model
 
             app.logger.info(f"Task {task_id}: Generating summary with {model_name}...")
-            response = app.gemini_client.models.generate_content(
-                model=model_name,
-                contents=[uploaded_file, prompt]
+            
+            response_text = generate_text_with_file(
+                app.text_client,
+                model_name,
+                pdf_file.text,
+                prompt,
+                "You are a helpful research assistant that summarizes documents clearly."
             )
 
-            pdf_file.summary = response.text
+            pdf_file.summary = response_text
             task.status = 'complete'
             task.result = json.dumps({'success': True})
             db.session.commit()
@@ -200,7 +215,7 @@ def file_content(file_id):
     }
 
 def _run_transcript_generation(app, task_id, file_id):
-    """Worker function to run transcript generation in the background."""
+    """Worker function to run transcript generation in the background using NanoGPT."""
     with app.app_context():
         try:
             task = Task.query.get(task_id)
@@ -211,18 +226,20 @@ def _run_transcript_generation(app, task_id, file_id):
             pdf_file = PDFFile.query.get(file_id)
             settings = get_settings()
 
-            if not app.gemini_client:
-                raise Exception("Gemini client not initialized.")
+            if not hasattr(app, 'text_client') or not app.text_client:
+                raise Exception("NanoGPT text client not initialized. Please set API key in settings.")
 
-            uploaded_file = _get_or_upload_file(app, pdf_file)
-
-            transcript_model_name = f"models/{settings.transcript_model}"
+            transcript_model_name = settings.transcript_model
             app.logger.info(f"Task {task_id}: Generating transcript with {transcript_model_name}...")
-            transcript_response = app.gemini_client.models.generate_content(
-                model=transcript_model_name,
-                contents=[uploaded_file, settings.transcript_prompt]
+            
+            transcript_text = generate_text_with_file(
+                app.text_client,
+                transcript_model_name,
+                pdf_file.text,
+                settings.transcript_prompt,
+                "You are a helpful research assistant that creates engaging podcast scripts from documents."
             )
-            transcript_text = transcript_response.text
+            
             pdf_file.transcript = transcript_text
 
             task.status = 'complete'
@@ -240,7 +257,7 @@ def _run_transcript_generation(app, task_id, file_id):
                 db.session.commit()
 
 def _run_podcast_generation(app, task_id, file_id):
-    """Worker function to run podcast audio generation in the background."""
+    """Worker function to run podcast audio generation in the background using DeepInfra Kokoro."""
     with app.app_context():
         try:
             task = Task.query.get(task_id)
@@ -254,41 +271,29 @@ def _run_podcast_generation(app, task_id, file_id):
             if not pdf_file.transcript:
                 raise Exception("Transcript not found for this file.")
 
-            if not app.gemini_client:
-                raise Exception("Gemini client not initialized.")
+            if not hasattr(app, 'tts_client') or not app.tts_client:
+                raise Exception("DeepInfra TTS client not initialized. Please set API key in settings.")
 
             transcript = pdf_file.transcript
-            app.logger.info(f"Task {task_id}: Generating audio from transcript for file {file_id}...")
-            tts_model_name = f"models/{settings.tts_model}"
-            tts_config = types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-                speech_config=types.SpeechConfig(
-                    multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
-                        speaker_voice_configs=[
-                            types.SpeakerVoiceConfig(
-                                speaker='Host',
-                                voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_host_voice))
-                            ),
-                            types.SpeakerVoiceConfig(
-                                speaker='Expert',
-                                voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=settings.tts_expert_voice))
-                            ),
-                        ]
-                    )
-                )
+            app.logger.info(f"Task {task_id}: Generating audio from transcript for file {file_id} using DeepInfra Kokoro...")
+            
+            # Get voice settings - use defaults if not set
+            host_voice = settings.tts_host_voice or 'af_bella'
+            expert_voice = settings.tts_expert_voice or 'am_onyx'
+            
+            # Generate podcast audio with two voices
+            combined_audio = generate_podcast_audio(
+                app.tts_client, 
+                transcript, 
+                host_voice, 
+                expert_voice,
+                speed=1.0
             )
-            tts_response = app.gemini_client.models.generate_content(
-                model=tts_model_name, contents=[transcript], config=tts_config
-            )
-            audio_part = tts_response.candidates[0].content.parts[0]
-            audio_data = audio_part.inline_data.data
-            mime_type = audio_part.inline_data.mime_type
-            match = re.search(r'rate=(\d+)', mime_type)
-            sample_rate = int(match.group(1)) if match else 24000
-            audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=sample_rate, channels=1)
+            
+            # Export to MP3
             mp3_filename = f"dialogue_{file_id}.mp3"
             mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
-            audio.export(mp3_filepath, format="mp3")
+            combined_audio.export(mp3_filepath, format="mp3")
 
             audio_url = url_for('generated_audio', filename=mp3_filename)
 
@@ -374,24 +379,45 @@ def chat_with_file(file_id):
     # Load history from the database
     history = json.loads(pdf_file.chat_history or '[]')
 
-    if not hasattr(app, 'gemini_client') or not app.gemini_client:
-        return jsonify({'error': 'Gemini client not initialized. Please set API key in settings.'}), 500
-
-    try:
-        uploaded_file = _get_or_upload_file(app, pdf_file)
-    except Exception as e:
-        app.logger.error(f"Chat failed during file check/upload for file_id {file_id}: {e}")
-        return jsonify({'error': f'Could not access the document file. Details: {str(e)}'}), 500
+    if not hasattr(app, 'text_client') or not app.text_client:
+        return jsonify({'error': 'NanoGPT text client not initialized. Please set API key in settings.'}), 500
 
     settings = get_settings()
-    model_name = f"models/{settings.chat_model}"
+    model_name = settings.chat_model
 
     try:
-        response_text = _generate_chat_response(uploaded_file, history, question, model_name, app.gemini_client, app.logger)
+        # Build conversation history in NanoGPT format
+        messages = [
+            {"role": "system", "content": "You are a helpful research assistant. Your task is to answer questions based solely on the content of the attached document. Do not use any external knowledge. If the answer cannot be found within the document, state that clearly."}
+        ]
+        
+        # Add document content as context
+        messages.append({
+            "role": "user", 
+            "content": f"Here is the document content:\n\n{pdf_file.text}\n\n---\n\nPlease answer questions about this document."
+        })
+        
+        # Add chat history
+        for msg in history:
+            role = msg.get('role', 'user')
+            if role == 'model':
+                role = 'assistant'
+            messages.append({"role": role, "content": msg.get('parts', [{}])[0].get('text', '')})
+        
+        # Add current question
+        messages.append({"role": "user", "content": question})
+        
+        # Generate response
+        response = app.text_client.chat.completions.create(
+            model=model_name,
+            messages=messages
+        )
+        
+        response_text = response.choices[0].message.content
 
         # Update history and save to database
-        history.append({'role': 'user', 'parts': [question]})
-        history.append({'role': 'model', 'parts': [response_text]})
+        history.append({'role': 'user', 'parts': [{'text': question}]})
+        history.append({'role': 'model', 'parts': [{'text': response_text}]})
         pdf_file.chat_history = json.dumps(history)
         db.session.commit()
 
@@ -406,6 +432,8 @@ def settings():
     settings = get_settings()
     if request.method == 'POST':
         settings.gemini_api_key = request.form.get('gemini_api_key')
+        settings.nanogpt_api_key = request.form.get('nanogpt_api_key')
+        settings.deepinfra_api_key = request.form.get('deepinfra_api_key')
         settings.summary_model = request.form.get('summary_model')
         settings.transcript_model = request.form.get('transcript_model')
         settings.chat_model = request.form.get('chat_model')
@@ -415,7 +443,8 @@ def settings():
         settings.summary_prompt = request.form.get('summary_prompt')
         settings.transcript_prompt = request.form.get('transcript_prompt')
         db.session.commit()
-        init_gemini_client(app)
+        init_tts_client(app)
+        init_text_client(app)
         return redirect(url_for('settings'))
 
     return render_template('settings.html', 
@@ -596,8 +625,8 @@ def play_voice_sample():
     if not voice:
         return jsonify({'error': 'Voice parameter is required'}), 400
 
-    if not app.gemini_client:
-         return jsonify({'error': 'Gemini client not initialized. Please set API key in settings.'}), 500
+    if not hasattr(app, 'tts_client') or not app.tts_client:
+         return jsonify({'error': 'DeepInfra TTS client not initialized. Please set API key in settings.'}), 500
 
     sample_text = "Hello, this is a sample of the selected voice."
     samples_folder = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], 'samples')
@@ -611,15 +640,10 @@ def play_voice_sample():
     if not os.path.exists(mp3_filepath):
         try:
             app.logger.info(f"Generating voice sample for '{voice}'...")
-            settings = get_settings()
-            tts_model_name = f"models/{settings.tts_model}"
 
-            audio_data, mime_type = generate_voice_sample(app.gemini_client, tts_model_name, voice, sample_text)
+            audio_data, _ = generate_voice_sample(app.tts_client, voice, sample_text)
 
-            match = re.search(r'rate=(\d+)', mime_type)
-            sample_rate = int(match.group(1)) if match else 24000
-
-            audio = AudioSegment(data=audio_data, sample_width=2, frame_rate=sample_rate, channels=1)
+            audio = AudioSegment.from_file(io.BytesIO(audio_data), format="mp3")
             audio.export(mp3_filepath, format="mp3")
             app.logger.info(f"Saved voice sample to {mp3_filepath}")
 
@@ -632,7 +656,8 @@ def play_voice_sample():
 
 
 # --- App Initialization ---
-init_gemini_client(app)
+init_tts_client(app)
+init_text_client(app)
 
 if __name__ == '__main__':
     app.run(debug=True)

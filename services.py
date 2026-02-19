@@ -1,60 +1,297 @@
 import os
 import json
 import fitz  # PyMuPDF
-from google import genai
-from google.genai import types
 import io
 import re
 import pathlib
 from pydub import AudioSegment
 from database import get_settings
 
+# Try to import OpenAI for DeepInfra Kokoro TTS
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 # --- Global lists for models and voices ---
 available_text_models = []
 available_tts_models = []
-# The Gemini API does not currently provide an endpoint to list voices,
-# so we are using a hardcoded list of available prebuilt voices.
+
+# Kokoro voices from DeepInfra - see https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
+# Format: (voice_id, description)
 available_voices = [
-    'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede',
-    'Callirrhoe', 'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba',
-    'Despina', 'Erinome', 'Algenib', 'Rasalgethi', 'Laomedeia', 'Achernar',
-    'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird', 'Zubenelgenubi',
-    'Vindemiatrix', 'Sadachbia', 'Sadaltager', 'Sulafat'
+    # American English Female
+    ('af_heart', 'AF Heart ❤️ - Best quality'),
+    ('af_bella', 'AF Bella 🔥 - High quality'),
+    ('af_alloy', 'AF Alloy'),
+    ('af_aoede', 'AF Aoede'),
+    ('af_kore', 'AF Kore'),
+    ('af_nicole', 'AF Nicole 🎧'),
+    ('af_nova', 'AF Nova'),
+    ('af_river', 'AF River'),
+    ('af_sarah', 'AF Sarah'),
+    ('af_sky', 'AF Sky'),
+    ('af_jessica', 'AF Jessica'),
+    # American English Male
+    ('am_adam', 'AM Adam'),
+    ('am_echo', 'AM Echo'),
+    ('am_eric', 'AM Eric'),
+    ('am_fenrir', 'AM Fenrir'),
+    ('am_liam', 'AM Liam'),
+    ('am_michael', 'AM Michael'),
+    ('am_onyx', 'AM Onyx'),
+    ('am_puck', 'AM Puck'),
+    ('am_santa', 'AM Santa'),
+    # British English
+    ('bf_alice', 'BF Alice'),
+    ('bf_emma', 'BF Emma'),
+    ('bf_isabella', 'BF Isabella'),
+    ('bf_lily', 'BF Lily'),
+    ('bm_daniel', 'BM Daniel'),
+    ('bm_fable', 'BM Fable'),
+    ('bm_george', 'BM George'),
+    ('bm_lewis', 'BM Lewis'),
+    # Japanese
+    ('jf_alpha', 'JF Alpha'),
+    ('jf_gongitsune', 'JF Gongitsune'),
+    ('jf_nezumi', 'JF Nezumi'),
+    ('jf_tebukuro', 'JF Tebukuro'),
+    ('jm_kumo', 'JM Kumo'),
+    # Mandarin Chinese
+    ('zf_xiaobei', 'ZF Xiaobei'),
+    ('zf_xiaoni', 'ZF Xiaoni'),
+    ('zf_xiaoxiao', 'ZF Xiaoxiao'),
+    ('zf_xiaoyi', 'ZF Xiaoyi'),
+    ('zm_yunjian', 'ZM Yunjian'),
+    ('zm_yunxi', 'ZM Yunxi'),
+    ('zm_yunxia', 'ZM Yunxia'),
+    ('zm_yunyang', 'ZM Yunyang'),
+    # Spanish
+    ('ef_dora', 'EF Dora'),
+    ('em_alex', 'EM Alex'),
+    ('em_santa', 'EM Santa'),
+    # French
+    ('ff_siwis', 'FF Siwis'),
+    # Hindi
+    ('hf_alpha', 'HF Alpha'),
+    ('hf_beta', 'HF Beta'),
+    ('hm_omega', 'HM Omega'),
+    ('hm_psi', 'HM Psi'),
+    # Italian
+    ('if_sara', 'IF Sara'),
+    ('im_nicola', 'IM Nicola'),
+    # Brazilian Portuguese
+    ('pf_dora', 'PF Dora'),
+    ('pm_alex', 'PM Alex'),
+    ('pm_santa', 'PM Santa'),
 ]
 
-def init_gemini_client(app_instance):
-    global available_text_models, available_tts_models
+
+def init_tts_client(app_instance):
+    """
+    Initialize the TTS client for DeepInfra Kokoro.
+    Uses OpenAI-compatible API.
+    """
+    global available_tts_models
     with app_instance.app_context():
         settings = get_settings()
-        api_key = settings.gemini_api_key or os.environ.get('GEMINI_API_KEY')
-        if api_key:
+        api_key = settings.deepinfra_api_key or os.environ.get('DEEPINFRA_API_KEY')
+        
+        if api_key and OPENAI_AVAILABLE:
             try:
-                client = genai.Client(api_key=api_key)
-                app_instance.gemini_client = client
-                app_instance.logger.info("Gemini Client initialized successfully.")
-
-                # Fetch and filter models
-                available_text_models.clear()
-                available_tts_models.clear()
-                for model in client.models.list():
-                    model_name = model.name.replace("models/", "")
-                    if 'generateContent' in model.supported_actions:
-                         # Heuristic to separate TTS from other generative models
-                        if 'tts' in model_name:
-                            available_tts_models.append(model_name)
-                        else:
-                            available_text_models.append(model_name)
-
-                available_text_models = sorted(available_text_models)
-                available_tts_models = sorted(available_tts_models)
-                app_instance.logger.info(f"Found {len(available_text_models)} text models and {len(available_tts_models)} TTS models.")
-
+                client = OpenAI(
+                    base_url="https://api.deepinfra.com/v1/openai",
+                    api_key=api_key
+                )
+                app_instance.tts_client = client
+                app_instance.logger.info("DeepInfra Kokoro TTS Client initialized successfully.")
+                
+                # Kokoro is the only model for now
+                available_tts_models = ['hexgrad/Kokoro-82M']
             except Exception as e:
-                app_instance.gemini_client = None
-                app_instance.logger.error(f"Failed to initialize Gemini Client or fetch models: {e}")
+                app_instance.tts_client = None
+                app_instance.logger.error(f"Failed to initialize DeepInfra TTS Client: {e}")
         else:
-            app_instance.gemini_client = None
-            app_instance.logger.warning("Gemini API key not found. Generative features will be disabled.")
+            app_instance.tts_client = None
+            if not api_key:
+                app_instance.logger.warning("DeepInfra API key not found. TTS features will be disabled.")
+            if not OPENAI_AVAILABLE:
+                app_instance.logger.warning("OpenAI package not installed. Run: pip install openai")
+
+
+def init_text_client(app_instance):
+    """
+    Initialize the text generation client for NanoGPT.
+    Uses OpenAI-compatible API.
+    """
+    global available_text_models
+    with app_instance.app_context():
+        settings = get_settings()
+        api_key = settings.nanogpt_api_key or os.environ.get('NANOGPT_API_KEY')
+        
+        if api_key and OPENAI_AVAILABLE:
+            try:
+                client = OpenAI(
+                    base_url="https://nano-gpt.com/api/v1",
+                    api_key=api_key
+                )
+                app_instance.text_client = client
+                app_instance.logger.info("NanoGPT text client initialized successfully.")
+                
+                # List available models - try to get them from the API
+                try:
+                    models = client.models.list()
+                    available_text_models = [m.id for m in models.data]
+                    app_instance.logger.info(f"Found {len(available_text_models)} text models.")
+                except Exception as e:
+                    app_instance.logger.warning(f"Could not fetch models list: {e}")
+                    # Default models if we can't fetch the list
+                    available_text_models = [
+                        'openai/gpt-5.2',
+                        'openai/gpt-5',
+                        'openai/o4-mini',
+                        'anthropic/claude-sonnet-4-20250514',
+                        'google/gemini-2.5-pro',
+                        'deepseek/deepseek-chat'
+                    ]
+            except Exception as e:
+                app_instance.text_client = None
+                app_instance.logger.error(f"Failed to initialize NanoGPT text client: {e}")
+        else:
+            app_instance.text_client = None
+            if not api_key:
+                app_instance.logger.warning("NanoGPT API key not found. Text generation features will be disabled.")
+            if not OPENAI_AVAILABLE:
+                app_instance.logger.warning("OpenAI package not installed. Run: pip install openai")
+
+
+def generate_text_completion(text_client, model, prompt, system_prompt=None):
+    """
+    Generate text completion using NanoGPT.
+    Returns the generated text.
+    """
+    if not text_client:
+        raise Exception("Text client not initialized")
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    
+    response = text_client.chat.completions.create(
+        model=model,
+        messages=messages
+    )
+    
+    return response.choices[0].message.content
+
+
+def generate_text_with_file(text_client, model, file_content, prompt, system_prompt=None):
+    """
+    Generate text using a document and prompt via NanoGPT.
+    Uses the file content as context.
+    """
+    if not text_client:
+        raise Exception("Text client not initialized")
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    
+    # Add the document content as context
+    context = f"Document content:\n{file_content}\n\n---\n\nUser question: {prompt}"
+    messages.append({"role": "user", "content": context})
+    
+    response = text_client.chat.completions.create(
+        model=model,
+        messages=messages
+    )
+    
+    return response.choices[0].message.content
+
+
+def generate_voice_sample(tts_client, voice_id, text, speed=1.0):
+    """
+    Generates a voice sample using DeepInfra Kokoro.
+    Returns a tuple of (audio_data, format).
+    """
+    if not tts_client:
+        raise Exception("TTS client not initialized")
+    
+    response = tts_client.audio.speech.create(
+        model="hexgrad/Kokoro-82M",
+        voice=voice_id,
+        input=text,
+        response_format="mp3",
+        speed=speed
+    )
+    
+    # Read the audio content
+    audio_data = response.content
+    return audio_data, "mp3"
+
+
+def generate_podcast_audio(tts_client, transcript, host_voice, expert_voice, speed=1.0):
+    """
+    Generates podcast audio from a transcript with two speakers.
+    
+    The transcript should contain markers like:
+    "Host: Hello and welcome..."
+    "Expert: Thank you for having me..."
+    
+    Returns the combined audio data as MP3.
+    """
+    if not tts_client:
+        raise Exception("TTS client not initialized")
+    
+    # Parse the transcript for speaker segments
+    # Pattern: "Host:" or "Expert:" at the beginning of lines
+    segments = []
+    current_speaker = None
+    current_text = []
+    
+    for line in transcript.split('\n'):
+        line = line.strip()
+        if line.startswith('Host:'):
+            if current_speaker and current_text:
+                segments.append((current_speaker, ' '.join(current_text)))
+            current_speaker = 'host'
+            current_text = [line[5:].strip()]
+        elif line.startswith('Expert:'):
+            if current_speaker and current_text:
+                segments.append((current_speaker, ' '.join(current_text)))
+            current_speaker = 'expert'
+            current_text = [line[7:].strip()]
+        elif current_speaker and line:
+            current_text.append(line)
+    
+    # Add the last segment
+    if current_speaker and current_text:
+        segments.append((current_speaker, ' '.join(current_text)))
+    
+    # If no segments found, try as single speaker
+    if not segments:
+        segments = [('host', transcript)]
+    
+    # Generate audio for each segment
+    combined_audio = AudioSegment.empty()
+    
+    # Small pause between segments (in milliseconds)
+    pause = AudioSegment.silent(duration=500)
+    
+    for speaker, text in segments:
+        voice_id = host_voice if speaker == 'host' else expert_voice
+        
+        try:
+            audio_data, _ = generate_voice_sample(tts_client, voice_id, text, speed)
+            segment_audio = AudioSegment.from_file(io.BytesIO(audio_data), format="mp3")
+            combined_audio += segment_audio + pause
+        except Exception as e:
+            print(f"Error generating audio for {speaker}: {e}")
+            continue
+    
+    return combined_audio
 
 
 def process_pdf(filepath):
@@ -143,6 +380,7 @@ def process_pdf(filepath):
                         })
         except Exception as e:
             # Log error if table processing fails for a page
+            import logging
             logging.warning(f"Could not process tables on page {page_num+1}: {e}")
 
 
@@ -156,24 +394,12 @@ def process_pdf(filepath):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'pdf'}
 
-def generate_voice_sample(client, model_name, voice_name, text):
-    """
-    Generates a voice sample using the specified voice.
-    Returns a tuple of (audio_data, mime_type).
-    """
-    tts_config = types.GenerateContentConfig(
-        response_modalities=["AUDIO"],
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
-            )
-        )
-    )
 
-    # The prompt for single-voice TTS is just the text itself.
-    tts_response = client.models.generate_content(
-        model=model_name, contents=[text], config=tts_config
-    )
-
-    audio_part = tts_response.candidates[0].content.parts[0]
-    return audio_part.inline_data.data, audio_part.inline_data.mime_type
+# Legacy function - kept for compatibility but uses DeepInfra now
+def generate_voice_sample_legacy(client, model_name, voice_name, text):
+    """
+    Legacy function for compatibility.
+    Now uses DeepInfra Kokoro instead of Gemini.
+    """
+    # This is now handled by generate_voice_sample above
+    pass

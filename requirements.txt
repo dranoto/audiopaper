@@ -7,3 +7,4 @@ SQLAlchemy
 google-genai
 gunicorn
 pydub
+openai

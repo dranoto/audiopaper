@@ -10,4 +10,5 @@ services:
       - ./static/figures:/app/static/figures
       - ./instance:/app/instance
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - NANOGPT_API_KEY=${NANOGPT_API_KEY}
+      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY}
