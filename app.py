@@ -23,6 +23,7 @@ from services import (
     generate_text_with_file,
     generate_text_completion,
 )
+from ragflow_service import get_ragflow_client
 
 # --- App and DB Setup ---
 app = Flask(__name__)
@@ -424,6 +425,8 @@ def settings():
         settings.gemini_api_key = request.form.get('gemini_api_key')
         settings.nanogpt_api_key = request.form.get('nanogpt_api_key')
         settings.deepinfra_api_key = request.form.get('deepinfra_api_key')
+        settings.ragflow_url = request.form.get('ragflow_url')
+        settings.ragflow_api_key = request.form.get('ragflow_api_key')
         settings.summary_model = request.form.get('summary_model')
         settings.transcript_model = request.form.get('transcript_model')
         settings.chat_model = request.form.get('chat_model')
@@ -643,6 +646,111 @@ def play_voice_sample():
 
     audio_url = url_for('generated_audio', filename=f'samples/{mp3_filename}')
     return jsonify({'audio_url': audio_url})
+
+
+# --- Ragflow Integration Routes ---
+
+@app.route('/ragflow')
+def ragflow_browser():
+    """Ragflow document browser"""
+    settings = get_settings()
+    client = get_ragflow_client(settings)
+    
+    if not client:
+        return render_template('ragflow_error.html', error="Ragflow not configured. Please add your Ragflow URL and API key in Settings.")
+    
+    try:
+        datasets = client.list_datasets()
+    except Exception as e:
+        return render_template('ragflow_error.html', error=f"Failed to connect to Ragflow: {str(e)}")
+    
+    return render_template('ragflow.html', datasets=datasets)
+
+
+@app.route('/ragflow/dataset/<dataset_id>')
+def ragflow_dataset(dataset_id):
+    """List documents in a Ragflow dataset"""
+    settings = get_settings()
+    client = get_ragflow_client(settings)
+    
+    if not client:
+        return jsonify({'error': 'Ragflow not configured'}), 400
+    
+    try:
+        documents, total = client.list_documents(dataset_id, page=1, size=100)
+        # Get dataset name
+        datasets = client.list_datasets()
+        dataset_name = next((d.get('name', 'Unknown') for d in datasets if d.get('id') == dataset_id), 'Unknown')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+    return jsonify({
+        'documents': documents,
+        'total': total,
+        'dataset_name': dataset_name
+    })
+
+
+@app.route('/ragflow/import/<dataset_id>/<document_id>', methods=['POST'])
+def ragflow_import(dataset_id, document_id):
+    """Import a document from Ragflow into AudioPaper"""
+    settings = get_settings()
+    client = get_ragflow_client(settings)
+    
+    if not client:
+        return jsonify({'error': 'Ragflow not configured'}), 400
+    
+    try:
+        # Get document content from Ragflow
+        content = client.get_document_content(dataset_id, document_id)
+        
+        # Get document info
+        documents, _ = client.list_documents(dataset_id, page=1, size=100)
+        doc_info = next((d for d in documents if d.get('id') == document_id), {})
+        doc_name = doc_info.get('name', 'Imported Document')
+        
+        # Create new PDFFile entry (we store text content since no actual PDF)
+        new_file = PDFFile(
+            filename=doc_name,
+            text=content,
+            figures='[]',
+            captions='[]'
+        )
+        db.session.add(new_file)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'file_id': new_file.id,
+            'filename': doc_name
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/ragflow/search/<dataset_id>', methods=['POST'])
+def ragflow_search(dataset_id):
+    """Search documents in a Ragflow dataset"""
+    settings = get_settings()
+    client = get_ragflow_client(settings)
+    
+    if not client:
+        return jsonify({'error': 'Ragflow not configured'}), 400
+    
+    query = request.json.get('query', '')
+    if not query:
+        return jsonify({'error': 'Query required'}), 400
+    
+    try:
+        # Use Ragflow's chat/retrieval API
+        result = client.request('POST', f'/datasets/{dataset_id}/retrieval', json={
+            'query': query,
+            'top_k': 10
+        })
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # --- App Initialization ---

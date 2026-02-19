@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AudioPaper - Ragflow Browser</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <div class="logo">
+                    <a href="/" style="text-decoration: none; color: inherit;">
+                        <i class="bi bi-file-earmark-text"></i>
+                        <span>AudioPaper</span>
+                    </a>
+                </div>
+                <div class="header-nav">
+                    <a href="{{ url_for('index') }}" class="btn btn-ghost">
+                        <i class="bi bi-house"></i>
+                        Library
+                    </a>
+                    <a href="{{ url_for('settings') }}" class="btn btn-ghost">
+                        <i class="bi bi-gear"></i>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="page-header">
+                <h1><i class="bi bi-cloud"></i> Ragflow Browser</h1>
+                <p>Browse and import documents from your Ragflow knowledge base</p>
+            </div>
+
+            <div class="datasets-grid">
+                {% for dataset in datasets %}
+                <div class="dataset-card" onclick="openDataset('{{ dataset.id }}', '{{ dataset.name }}')">
+                    <div class="dataset-icon">
+                        <i class="bi bi-collection"></i>
+                    </div>
+                    <div class="dataset-info">
+                        <h3>{{ dataset.name }}</h3>
+                        <p class="dataset-meta">
+                            <span><i class="bi bi-file-text"></i> {{ dataset.doc_num or 0 }} docs</span>
+                            <span><i class="bi bi-hdd"></i> {{ dataset.chunk_num or 0 }} chunks</span>
+                        </p>
+                    </div>
+                    <div class="dataset-arrow">
+                        <i class="bi bi-chevron-right"></i>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Document List Modal -->
+            <div class="modal-overlay" id="documents-modal" style="display: none;">
+                <div class="modal-content modal-lg">
+                    <div class="modal-header">
+                        <h3 id="modal-title">Documents</h3>
+                        <button class="btn btn-ghost" onclick="closeModal('documents-modal')">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="documents-list" class="documents-list">
+                            <div class="text-center p-4">
+                                <div class="spinner"></div>
+                                <p class="mt-2">Loading documents...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let currentDatasetId = null;
+
+        function openDataset(datasetId, datasetName) {
+            currentDatasetId = datasetId;
+            document.getElementById('modal-title').textContent = datasetName;
+            document.getElementById('documents-modal').style.display = 'flex';
+            
+            fetch(`/ragflow/dataset/${datasetId}`)
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('documents-list');
+                    if (data.error) {
+                        list.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                        return;
+                    }
+                    
+                    if (data.documents.length === 0) {
+                        list.innerHTML = '<p class="text-muted text-center">No documents in this dataset</p>';
+                        return;
+                    }
+                    
+                    list.innerHTML = data.documents.map(doc => `
+                        <div class="document-item">
+                            <div class="document-icon">
+                                <i class="bi bi-file-earmark-text"></i>
+                            </div>
+                            <div class="document-info">
+                                <h4>${doc.name || 'Untitled'}</h4>
+                                <p>
+                                    <span><i class="bi bi-collection"></i> ${doc.chunk_count || 0} chunks</span>
+                                    <span><i class="bi bi-hdd"></i> ${formatSize(doc.size)}</span>
+                                </p>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="importDoc('${datasetId}', '${doc.id}', '${doc.name}')">
+                                <i class="bi bi-download"></i> Import
+                            </button>
+                        </div>
+                    `).join('');
+                })
+                .catch(err => {
+                    document.getElementById('documents-list').innerHTML = 
+                        `<div class="alert alert-danger">Error: ${err}</div>`;
+                });
+        }
+
+        function importDoc(datasetId, docId, docName) {
+            if (!confirm(`Import "${docName}" into AudioPaper?`)) return;
+            
+            fetch(`/ragflow/import/${datasetId}/${docId}`, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                        return;
+                    }
+                    alert(`Imported successfully! Redirecting...`);
+                    window.location.href = `/?file=${data.file_id}`;
+                })
+                .catch(err => alert('Error: ' + err));
+        }
+
+        function formatSize(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+    </script>
+</body>
+</html>

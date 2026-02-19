@@ -41,6 +41,8 @@ class Settings(db.Model):
     gemini_api_key = db.Column(db.String(200), nullable=True)
     nanogpt_api_key = db.Column(db.String(200), nullable=True)
     deepinfra_api_key = db.Column(db.String(200), nullable=True)
+    ragflow_url = db.Column(db.String(200), nullable=True)
+    ragflow_api_key = db.Column(db.String(200), nullable=True)
     summary_model = db.Column(db.String(100), nullable=False, default='openai/gpt-5.2')
     transcript_model = db.Column(db.String(100), nullable=False, default='openai/gpt-5.2')
     chat_model = db.Column(db.String(100), nullable=False, default='openai/gpt-5.2')

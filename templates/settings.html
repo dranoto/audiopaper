@@ -29,6 +29,16 @@
                                 <div class="form-text">Required for summaries, transcripts, and chat. Get one at https://nano-gpt.com</div>
                             </div>
                             <div class="mb-3">
+                                <label for="ragflow_url" class="form-label">Ragflow URL</label>
+                                <input type="text" class="form-control" id="ragflow_url" name="ragflow_url" value="{{ settings.ragflow_url }}" placeholder="https://rag.latour.live">
+                                <div class="form-text">Your self-hosted Ragflow instance URL</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="ragflow_api_key" class="form-label">Ragflow API Key</label>
+                                <input type="password" class="form-control" id="ragflow_api_key" name="ragflow_api_key" value="{{ settings.ragflow_api_key }}">
+                                <div class="form-text">Required for browsing and importing from Ragflow</div>
+                            </div>
+                            <div class="mb-3">
                                 <label for="deepinfra_api_key" class="form-label">DeepInfra API Key (for TTS)</label>
                                 <input type="password" class="form-control" id="deepinfra_api_key" name="deepinfra_api_key" value="{{ settings.deepinfra_api_key }}">
                                 <div class="form-text">Required for text-to-speech. Get one at https://deepinfra.com</div>
