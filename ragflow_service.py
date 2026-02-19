@@ -30,7 +30,69 @@ class RagflowClient:
     
     def list_documents(self, dataset_id, page=1, size=50):
         result = self.request('GET', f'/datasets/{dataset_id}/documents?page={page}&size={size}')
-        return result.get('data', {}).get('docs', []), result.get('data', {}).get('total', 0)
+        docs = result.get('data', {}).get('docs', [])
+        
+        # Enrich with PubMed titles for PMC files
+        docs = self._enrich_with_pubmed_titles(docs)
+        
+        return docs, result.get('data', {}).get('total', 0)
+    
+    def _enrich_with_pubmed_titles(self, docs):
+        """Fetch human-readable titles from PubMed for PMC files"""
+        # Extract PMIDs from file names like "PMC12527568.md"
+        pmids = []
+        for doc in docs:
+            name = doc.get('name', '')
+            if name.startswith('PMC') and name.endswith('.md'):
+                pmid = name[3:-3]  # Remove 'PMC' prefix and '.md' suffix
+                pmids.append((doc.get('id'), pmid))
+        
+        if not pmids:
+            return docs
+        
+        # Batch fetch from PubMed (can handle multiple IDs)
+        pmid_list = [p[1] for p in pmids]
+        try:
+            # PubMed ESummary can handle multiple IDs
+            pmid_str = ','.join(pmid_list)
+            resp = requests.get(
+                f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+                params={'db': 'pubmed', 'id': pmid_str, 'retmode': 'json'},
+                timeout=10
+            )
+            data = resp.json()
+            
+            # Map PMID to title
+            title_map = {}
+            for pmid in pmid_list:
+                try:
+                    title = data.get('result', {}).get(pmid, {}).get('title', '')
+                    if title:
+                        # Truncate long titles
+                        if len(title) > 80:
+                            title = title[:77] + '...'
+                        title_map[pmid] = title
+                except:
+                    pass
+            
+            # Update docs with titles
+            for doc in docs:
+                name = doc.get('name', '')
+                if name.startswith('PMC') and name.endswith('.md'):
+                    pmid = name[3:-3]
+                    if pmid in title_map:
+                        doc['title'] = title_map[pmid]
+                    else:
+                        doc['title'] = name  # Fallback to filename
+                else:
+                    doc['title'] = name
+                    
+        except Exception as e:
+            # If PubMed lookup fails, just use filename
+            for doc in docs:
+                doc['title'] = doc.get('name', '')
+        
+        return docs
     
     def get_document_chunks(self, dataset_id, document_id, page=1, size=100):
         """Get all chunks from a document for importing"""

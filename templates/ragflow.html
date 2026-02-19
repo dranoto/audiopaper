@@ -107,7 +107,7 @@
                                 <i class="bi bi-file-earmark-text"></i>
                             </div>
                             <div class="document-info">
-                                <h4>${doc.name || 'Untitled'}</h4>
+                                <h4>${doc.title || doc.name || 'Untitled'}</h4>
                                 <p>
                                     <span><i class="bi bi-collection"></i> ${doc.chunk_count || 0} chunks</span>
                                     <span><i class="bi bi-hdd"></i> ${formatSize(doc.size)}</span>
