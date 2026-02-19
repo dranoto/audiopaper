@@ -3,12 +3,16 @@ services:
   web:
     build: .
     ports:
-      - "8000:8000"
+      - "8010:8000"
     volumes:
       - ./uploads:/app/uploads
       - ./generated_audio:/app/generated_audio
       - ./static/figures:/app/static/figures
       - ./instance:/app/instance
+    env_file:
+      - .env
     environment:
       - NANOGPT_API_KEY=${NANOGPT_API_KEY}
       - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY}
+      - RAGFLOW_URL=${RAGFLOW_URL}
+      - RAGFLOW_API_KEY=${RAGFLOW_API_KEY}
