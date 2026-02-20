@@ -411,6 +411,29 @@ body {
     color: var(--accent);
 }
 
+.library-item-row {
+    display: flex;
+    align-items: center;
+}
+
+.library-item-row .library-item {
+    flex: 1;
+}
+
+.library-delete {
+    opacity: 0;
+    padding: 4px 8px;
+    color: var(--text-muted);
+}
+
+.library-item-row:hover .library-delete {
+    opacity: 1;
+}
+
+.library-delete:hover {
+    color: var(--danger);
+}
+
 .library-item i {
     font-size: 14px;
 }

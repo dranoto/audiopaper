@@ -94,6 +94,9 @@
                         <span class="filename">{{ current_file.filename }}</span>
                     </div>
                     <div class="file-actions">
+                        <button class="btn btn-ghost btn-sm text-danger" onclick="deleteFile({{ current_file.id }})" title="Delete">
+                            <i class="bi bi-trash"></i>
+                        </button>
                         <button class="btn btn-ghost btn-sm" onclick="window.location.href='/'">
                             <i class="bi bi-x-lg"></i>
                         </button>
@@ -261,11 +264,16 @@
                     <h4>Library</h4>
                     <div class="library-list">
                         {% for file in all_files %}
-                        <a href="/?file={{ file.id }}" class="library-item {% if file.id == current_file.id %}active{% endif %}">
-                            <i class="bi bi-file-earmark-text"></i>
-                            <span>{{ file.filename[:20] }}{% if file.filename|length > 20 %}...{% endif %}</span>
-                            {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto" title="Summary ready"></i>{% endif %}
-                        </a>
+                        <div class="library-item-row">
+                            <a href="/?file={{ file.id }}" class="library-item {% if file.id == current_file.id %}active{% endif %}">
+                                <i class="bi bi-file-earmark-text"></i>
+                                <span>{{ file.filename[:18] }}{% if file.filename|length > 18 %}...{% endif %}</span>
+                                {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto" title="Summary ready"></i>{% endif %}
+                            </a>
+                            <button class="btn btn-ghost btn-sm library-delete" onclick="event.preventDefault(); deleteFile({{ file.id }})" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
                         {% endfor %}
                     </div>
                     <a href="{{ url_for('ragflow_browser') }}" class="btn btn-outline w-100 mt-3">
@@ -400,6 +408,21 @@
             fetch('/generate_podcast/{{ current_file.id }}', { method: 'POST' })
                 .then(r => r.json())
                 .then(data => pollTask(data.task_id, 'podcast'));
+        }
+
+        function deleteFile(fileId) {
+            if (!confirm('Delete this paper? This will remove the summary, transcript, and any generated audio.')) return;
+            
+            fetch(`/delete_file/${fileId}`, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('Error: ' + data.error);
+                    } else {
+                        window.location.href = '/';
+                    }
+                })
+                .catch(err => alert('Error: ' + err));
         }
 
         function showSummary() {
