@@ -944,8 +944,8 @@ def ragflow_browser():
     
     # Get all imported files to check for duplicates
     all_files = PDFFile.query.all()
-    imported_names = {f.filename for f in all_files}
-    
+    imported_names = [f.filename for f in all_files]
+
     return render_template('ragflow.html', datasets=datasets, imported_names=imported_names)
 
 
