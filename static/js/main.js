@@ -11,12 +11,14 @@ let pageRendering = false;
 let pageNumPending = null;
 const scale = 1.5;
 const canvas = document.getElementById('pdf-canvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 const audioPlayer = document.getElementById('audio-player');
 const converter = new showdown.Converter();
 
 // --- PDF Rendering ---
 function renderPage(num) {
+    if (!canvas || !ctx) return;  // Guard against missing canvas
+
     pageRendering = true;
     pdfDoc.getPage(num).then(function(page) {
         const viewport = page.getViewport({scale: scale});
@@ -38,7 +40,8 @@ function renderPage(num) {
         });
     });
 
-    document.getElementById('page_num').textContent = num;
+    const pageNumEl = document.getElementById('page_num');
+    if (pageNumEl) pageNumEl.textContent = num;
 }
 
 function queueRenderPage(num) {

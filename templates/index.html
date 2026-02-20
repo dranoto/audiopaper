@@ -460,8 +460,8 @@
             .then(r => r.json())
             .then(data => {
                 const select = document.getElementById('ragflow-dataset-select');
-                if (data.datasets) {
-                    select.innerHTML = data.datasets.map(d => 
+                if (select && data.datasets) {
+                    select.innerHTML = data.datasets.map(d =>
                         `<option value="${d.id}">${d.name}</option>`
                     ).join('');
                 }
@@ -470,7 +470,7 @@
         // Toggle ragflow dataset dropdown
         document.getElementById('upload_to_ragflow')?.addEventListener('change', function() {
             const select = document.getElementById('ragflow-dataset-select');
-            select.style.display = this.checked ? 'block' : 'none';
+            if (select) select.style.display = this.checked ? 'block' : 'none';
         });
 
         // File input handler
@@ -482,9 +482,19 @@
 
         // Mobile library toggle
         function toggleLibrary() {
-            const sidebar = document.querySelector('.library-sidebar');
-            sidebar.classList.toggle('visible');
-            sidebar.classList.toggle('collapsed');
+            // Toggle all library sidebar elements
+            document.querySelectorAll('.library-sidebar').forEach(sidebar => {
+                if (sidebar.classList.contains('visible')) {
+                    sidebar.classList.remove('visible');
+                    sidebar.classList.add('collapsed');
+                } else if (sidebar.classList.contains('collapsed')) {
+                    sidebar.classList.remove('collapsed');
+                    sidebar.classList.add('visible');
+                } else {
+                    // If neither class is present, show it
+                    sidebar.classList.add('visible');
+                }
+            });
         }
 
         // Initialize mobile library - start hidden, user taps button to see
@@ -728,10 +738,15 @@
         let currentTaskInterval = null;
 
         function showProgressModal(taskType, message) {
-            // If inline mode, don't show modal
+            // If inline mode, try inline first but don't recurse back
             if (globalInlineMode) {
-                showLoading(message, taskType);
-                return;
+                const inlineDiv = document.getElementById('inline-progress');
+                if (inlineDiv !== null) {
+                    // Inline elements exist - use showLoading which handles this
+                    showLoading(message, taskType);
+                    return;
+                }
+                // Inline elements don't exist - fall through to modal (don't recurse)
             }
             
             const modal = document.getElementById('progress-modal');
