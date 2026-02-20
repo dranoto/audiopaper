@@ -190,40 +190,42 @@ class RagflowClient:
         """Get full text content from a document by downloading it"""
         try:
             # First, get document info to find where the file is
-            result = self.request('GET', f'/datasets/{dataset_id}/documents/{document_id}')
-            doc_data = result.get('data', {})
+            url = f"{self.url}/api/v1/datasets/{dataset_id}/documents/{document_id}"
+            resp = self.session.get(url)
             
-            # Try various fields for content
-            for field in ['content', 'text', 'markdown', 'source_text', 'raw_content']:
-                content = doc_data.get(field, '')
-                if content:
-                    return content
+            # Check if it's JSON
+            content_type = resp.headers.get('Content-Type', '')
+            print(f"Document endpoint content-type: {content_type}")
             
-            # Try download endpoint if available
-            try:
-                url = f"{self.url}/api/v1/datasets/{dataset_id}/documents/{document_id}/download"
-                resp = self.session.get(url)
-                if resp.status_code == 200:
-                    content = resp.text
+            if 'json' in content_type:
+                result = resp.json()
+                doc_data = result.get('data', {})
+                
+                # Try various fields for content
+                for field in ['content', 'text', 'markdown', 'source_text', 'raw_content']:
+                    content = doc_data.get(field, '')
                     if content:
                         return content
+                
+                # Log what keys we have
+                print(f"Document data keys: {list(doc_data.keys())}")
+                location = doc_data.get('location')
+                print(f"Document location: {location}")
+            else:
+                # Not JSON - might be the raw file content
+                print(f"Got non-JSON response: {resp.text[:200] if resp.text else 'empty'}")
+                if resp.text:
+                    return resp.text
+            
+            # Try download endpoint
+            try:
+                download_url = f"{self.url}/api/v1/datasets/{dataset_id}/documents/{document_id}/download"
+                dl_resp = self.session.get(download_url)
+                print(f"Download endpoint status: {dl_resp.status_code}")
+                if dl_resp.status_code == 200 and dl_resp.text:
+                    return dl_resp.text
             except Exception as e:
                 print(f"Download attempt failed: {e}")
-            
-            # Try with .md extension
-            try:
-                url = f"{self.url}/api/v1/datasets/{dataset_id}/documents/{document_id}/download?name={document_id}.md"
-                resp = self.session.get(url)
-                if resp.status_code == 200:
-                    content = resp.text
-                    if content:
-                        return content
-            except Exception as e:
-                print(f"Download with .md failed: {e}")
-            
-            # Log what we got for debugging
-            print(f"Document data keys: {doc_data.keys()}")
-            print(f"Document location: {doc_data.get('location')}")
             
             return ''
         except Exception as e:
