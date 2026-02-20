@@ -15,9 +15,20 @@ class RagflowClient:
     
     def request(self, method, path, **kwargs):
         url = f"{self.url}/api/v1{path}"
-        resp = self.session.request(method, url, **kwargs)
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = self.session.request(method, url, **kwargs)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.HTTPError as e:
+            # Try to get more details from the response
+            try:
+                error_data = resp.json()
+                error_msg = error_data.get('message') or error_data.get('code') or str(e)
+            except:
+                error_msg = str(e)
+            raise Exception(f"Ragflow API error: {error_msg}") from e
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Ragflow connection error: {str(e)}") from e
     
     def list_datasets(self):
         result = self.request('GET', '/datasets')

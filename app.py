@@ -1,6 +1,5 @@
 import os
 import json
-import pathlib
 import re
 import uuid
 import threading
@@ -172,33 +171,10 @@ def upload_file():
     
     thread = threading.Thread(target=_run_summary_generation, args=(app, task_id, new_file.id))
     thread.start()
-    
+
+
     # Redirect to file page with summary loading state
     return redirect(url_for('index', file=new_file.id, task_id=task_id))
-
-def _get_or_upload_file(app, pdf_file):
-    """
-    Checks if a file is already uploaded to Gemini and still exists.
-    If not, it uploads the file. Returns the Gemini file object.
-    """
-    client = app.gemini_client
-    if pdf_file.gemini_file_id:
-        try:
-            app.logger.info(f"Checking for existing file {pdf_file.gemini_file_id}...")
-            found_file = client.files.get(name=pdf_file.gemini_file_id)
-            app.logger.info(f"Found existing file: {found_file.name}")
-            return found_file
-        except Exception as e:
-            app.logger.warning(f"Could not retrieve file {pdf_file.gemini_file_id}. It may have expired. Error: {e}. Re-uploading.")
-            pass
-
-    filepath = pathlib.Path(os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename))
-    app.logger.info(f"Uploading {filepath} to Gemini...")
-    uploaded_file = client.files.upload(file=filepath)
-    pdf_file.gemini_file_id = uploaded_file.name
-    db.session.commit()
-    app.logger.info(f"File uploaded successfully. New file ID: {uploaded_file.name}")
-    return uploaded_file
 
 
 def _run_summary_generation(app, task_id, file_id):
@@ -1063,8 +1039,8 @@ def ragflow_import(dataset_id, document_id):
         # Get document content from Ragflow
         content = client.get_document_content(dataset_id, document_id)
         
-        # Try to get doc info from cache first
-        cache_key = f"docs_{dataset_id}"
+        # Try to get doc info from cache - use the same key as ragflow_dataset
+        cache_key = f"docs_{dataset_id}_all"
         cached = ragflow_cache.get(cache_key)
         if cached and cached.get('documents'):
             doc_info = next((d for d in cached['documents'] if d.get('id') == document_id), {})
