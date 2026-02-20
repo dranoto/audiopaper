@@ -128,7 +128,7 @@
                         <div class="step-label">Ingest</div>
                     </div>
                     <div class="step-line"></div>
-                    <div class="step {% if current_file.summary %}completed{% elif current_file and initial_task_id %}active{% endif %}">
+                    <div class="step {% if current_file.summary %}completed{% elif current_file and auto_generate %}active{% endif %}">
                         <div class="step-number">2</div>
                         <div class="step-label">Summary</div>
                     </div>
@@ -195,7 +195,7 @@
                     {% endif %}
 
                     <!-- File selected but no summary yet -->
-                    {% if current_file and not current_file.summary and not initial_task_id %}
+                    {% if current_file and not current_file.summary and not auto_generate %}
                     <div class="workflow-step">
                         <div class="step-header">
                             <h3><span class="step-num">2</span> Summary</h3>
@@ -520,23 +520,28 @@
             'podcast': { step: 4, name: 'Audio', icon: 'bi-headphones' }
         };
 
-        // Poll for initial summary task if present (but check if already complete)
-        const initialTaskId = '{{ initial_task_id }}' !== 'None' ? '{{ initial_task_id }}' : null;
+        // Auto-generate summary on page load if requested (from import)
+        const autoGenerate = '{{ auto_generate }}' !== 'None' ? '{{ auto_generate }}' : null;
         const currentFileHasSummary = {{ 'true' if current_file and current_file.summary else 'false' }};
 
-        // Use global flag
-        if (initialTaskId && !currentFileHasSummary) {
-            // Hide modal, use inline progress instead
-            if (globalInlineMode) {
-                document.getElementById('progress-modal')?.classList.add('hidden');
-            }
-            pollTask(initialTaskId, 'summary', globalInlineMode);
-        } else if (currentFileHasSummary && initialTaskId) {
-            // Summary already exists, just clear the task_id from URL
+        // Use streaming for auto-generation
+        if (autoGenerate === 'summary' && !currentFileHasSummary) {
+            // Set inline mode and start streaming
+            globalInlineMode = true;
+            // Clear the URL params
             const url = new URL(window.location);
-            url.searchParams.delete('task_id');
+            url.searchParams.delete('generate');
             url.searchParams.delete('inline');
-            window.history.replaceState({}, '', url);
+            window.history.replaceState({}, '', url.toString());
+
+            // Start streaming after a brief delay to let page render
+            setTimeout(() => streamSummary(), 500);
+        } else if (currentFileHasSummary && autoGenerate) {
+            // Summary already exists, just clear the param from URL
+            const url = new URL(window.location);
+            url.searchParams.delete('generate');
+            url.searchParams.delete('inline');
+            window.history.replaceState({}, '', url.toString());
         }
 
         // Streaming support using SSE

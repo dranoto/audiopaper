@@ -86,7 +86,7 @@ os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
 def index():
     # Get optional file parameter
     file_id = request.args.get('file', type=int)
-    task_id = request.args.get('task_id')  # For tracking auto-summary progress
+    generate = request.args.get('generate')  # For auto-generating on page load
     current_file = PDFFile.query.get(file_id) if file_id else None
     
     # Get all files for library
@@ -109,7 +109,7 @@ def index():
     return render_template('index.html', 
                           all_files=all_files,
                           current_file=current_file,
-                          initial_task_id=task_id)
+                          auto_generate=generate)
 
 @app.route('/create_folder', methods=['POST'])
 def create_folder():
@@ -157,24 +157,14 @@ def upload_file():
                     f.write(markdown_content)
                 
                 # Upload to Ragflow
-                result = client.request('POST', f'/datasets/{ragflow_dataset}/documents', 
+                result = client.request('POST', f'/datasets/{ragflow_dataset}/documents',
                     files={'file': open(temp_md, 'rb')})
                 os.remove(temp_md)
         except Exception as e:
             app.logger.error(f"Failed to upload to Ragflow: {e}")
 
-    # Auto-generate summary after upload
-    task_id = str(uuid.uuid4())
-    new_task = Task(id=task_id, status='processing')
-    db.session.add(new_task)
-    db.session.commit()
-    
-    thread = threading.Thread(target=_run_summary_generation, args=(app, task_id, new_file.id))
-    thread.start()
-
-
-    # Redirect to file page with summary loading state
-    return redirect(url_for('index', file=new_file.id, task_id=task_id))
+    # Redirect to file page with flag to trigger streaming summary
+    return redirect(url_for('index', file=new_file.id, generate='summary'))
 
 
 def _run_summary_generation(app, task_id, file_id):
