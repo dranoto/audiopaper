@@ -488,7 +488,7 @@
 
         function pollTask(taskId, type) {
             const interval = setInterval(() => {
-                fetch(`/{{ type }}_status/${taskId}`)
+                fetch('/' + type + '_status/' + taskId)
                     .then(r => r.json())
                     .then(data => {
                         if (data.status === 'complete') {
