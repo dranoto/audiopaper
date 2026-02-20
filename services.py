@@ -259,16 +259,18 @@ def generate_podcast_audio(tts_client, transcript, host_voice, expert_voice, spe
     
     for line in transcript.split('\n'):
         line = line.strip()
-        if line.startswith('Host:'):
+        # Handle markdown bold like **Host:** or **Expert:**
+        line_clean = line.replace('**', '').strip()
+        if line_clean.startswith('Host:'):
             if current_speaker and current_text:
                 segments.append((current_speaker, ' '.join(current_text)))
             current_speaker = 'host'
-            current_text = [line[5:].strip()]
-        elif line.startswith('Expert:'):
+            current_text = [line_clean[5:].strip()]
+        elif line_clean.startswith('Expert:'):
             if current_speaker and current_text:
                 segments.append((current_speaker, ' '.join(current_text)))
             current_speaker = 'expert'
-            current_text = [line[7:].strip()]
+            current_text = [line_clean[7:].strip()]
         elif current_speaker and line:
             current_text.append(line)
     
