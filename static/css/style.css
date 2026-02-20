@@ -470,7 +470,6 @@ body {
     width: 100%;
     max-width: 600px;
     height: 80vh;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
