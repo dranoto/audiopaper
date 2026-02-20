@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -303,25 +304,7 @@
                 </button>
             </div>
             <div class="modal-body">
-                <div id="summary-text" style="white-space: pre-wrap; line-height: 1.6;">{{ current_file.summary if current_file.summary else 'No summary yet.' }}</div>
-                <script>
-                    // Simple markdown strip for summary display
-                    (function() {
-                        const el = document.getElementById('summary-text');
-                        if (el) {
-                            let text = el.innerText || el.textContent || '';
-                            // Remove common markdown
-                            text = text.replace(/^#+\s*/gm, '');  // Headers
-                            text = text.replace(/\*\*(.+?)\*\*/g, '$1');  // Bold
-                            text = text.replace(/\*(.+?)\*/g, '$1');  // Italic
-                            text = text.replace(/`(.+?)`/g, '$1');  // Code
-                            text = text.replace(/\[(.+?)\]\(.+?\)/g, '$1');  // Links
-                            text = text.replace(/^[-*+]\s+/gm, '');  // Lists
-                            text = text.replace(/^\d+\.\s+/gm, '');  // Numbered lists
-                            el.textContent = text;
-                        }
-                    })();
-                </script>
+                <div id="summary-text">{{ current_file.summary if current_file.summary else 'No summary yet.' }}</div>
             </div>
         </div>
     </div>
@@ -461,6 +444,11 @@
         }
 
         function showSummary() {
+            // Render markdown
+            const el = document.getElementById('summary-text');
+            if (el && typeof marked !== 'undefined') {
+                el.innerHTML = marked.parse(el.textContent || el.innerText);
+            }
             document.getElementById('summary-modal').style.display = 'flex';
         }
 
