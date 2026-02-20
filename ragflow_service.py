@@ -187,35 +187,23 @@ class RagflowClient:
         return chunks
     
     def get_document_content(self, dataset_id, document_id):
-        """Get full text content from a document by combining chunks"""
-        chunks = self.get_document_chunks(dataset_id, document_id)
-        
-        # If no chunks, try to get the document directly (may not be parsed yet)
-        if not chunks:
-            try:
-                result = self.request('GET', f'/datasets/{dataset_id}/documents/{document_id}')
-                doc_data = result.get('data', {})
-                # Try various fields that might contain the content
-                for field in ['content', 'text', 'markdown', 'source_text', 'raw_content']:
-                    content = doc_data.get(field, '')
-                    if content:
-                        return content
-            except Exception as e:
-                print(f"Could not get raw document content: {e}")
+        """Get full text content from a document - direct fetch without chunks"""
+        try:
+            # Get the document directly (no chunks)
+            result = self.request('GET', f'/datasets/{dataset_id}/documents/{document_id}')
+            doc_data = result.get('data', {})
+            
+            # Try various fields that might contain the content
+            for field in ['content', 'text', 'markdown', 'source_text', 'raw_content']:
+                content = doc_data.get(field, '')
+                if content:
+                    return content
+            
+            # If still nothing, return empty
             return ''
-        
-        # Sort by chunk index if available
-        chunks.sort(key=lambda x: x.get('chunk_order', 0))
-        
-        # Combine all chunk content - try various fields
-        content_parts = []
-        for chunk in chunks:
-            # Try different content fields
-            content = chunk.get('content') or chunk.get('text') or chunk.get('markdown') or chunk.get('source_text') or ''
-            if content:
-                content_parts.append(content)
-        
-        return '\n\n'.join(content_parts)
+        except Exception as e:
+            print(f"Could not get raw document content: {e}")
+            return ''
 
 
 def get_ragflow_client(settings):
