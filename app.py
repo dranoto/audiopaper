@@ -278,7 +278,8 @@ def summarize_stream(file_id):
 
         except Exception as e:
             import traceback
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e) + '\\n' + traceback.format_exc()})}\n\n"
+            error_detail = str(e) + '\n' + traceback.format_exc()
+            yield f"data: {json.dumps({'type': 'error', 'error': error_detail})}\n\n"
 
     response = Response(stream_with_context(generate()), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
