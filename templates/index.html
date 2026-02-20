@@ -83,9 +83,9 @@
                         <div class="step-label">Ingest</div>
                     </div>
                     <div class="step-line"></div>
-                    <div class="step {% if current_file.summary %}completed{% endif %}">
+                    <div class="step {% if current_file.summary %}completed{% elif current_file and initial_task_id %}active{% endif %}">
                         <div class="step-number">2</div>
-                        <div class="step-label">Summarize</div>
+                        <div class="step-label">Summary</div>
                     </div>
                     <div class="step-line"></div>
                     <div class="step {% if current_file.transcript %}completed{% endif %}">
@@ -95,61 +95,74 @@
                     <div class="step-line"></div>
                     <div class="step {% if audio_exists %}completed{% endif %}">
                         <div class="step-number">4</div>
-                        <div class="step-label">Generate</div>
+                        <div class="step-label">Audio</div>
                     </div>
                 </div>
 
                 <!-- Main Workflow Area -->
                 <div class="workflow-content">
                     <!-- Step 1: Ingest (Show extracted text) -->
-                    {% if current_file.text and not current_file.summary %}
+                    {% if current_file.text and not current_file.summary and not initial_task_id %}
                     <div class="workflow-step">
                         <div class="step-header">
                             <h3><span class="step-num">1</span> Document Ingested</h3>
-                            <p class="step-desc">Your PDF has been processed. Ready to summarize.</p>
+                            <p class="step-desc">Your PDF has been processed. Generating summary...</p>
                         </div>
                         <div class="step-content">
-                            <button class="btn btn-primary btn-lg w-100" onclick="generateSummary()">
-                                <i class="bi bi-lightning"></i>
-                                Generate Summary
-                            </button>
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2">Generating summary...</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Summary Loading State -->
+                    {% if initial_task_id and not current_file.summary %}
+                    <div class="workflow-step">
+                        <div class="step-header">
+                            <h3><span class="step-num">2</span> Generating Summary</h3>
+                        </div>
+                        <div class="step-content">
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2">Analyzing paper and creating summary...</p>
+                            </div>
                         </div>
                     </div>
                     {% endif %}
 
                     <!-- Step 2: Summary -->
-                    {% if current_file.summary and not current_file.transcript %}
+                    {% if current_file.summary %}
                     <div class="workflow-step">
                         <div class="step-header">
                             <h3><span class="step-num">2</span> Summary</h3>
-                            <button class="btn btn-sm btn-ghost" onclick="showSummary()">View</button>
+                            <button class="btn btn-sm btn-ghost" onclick="showSummary()">View/Edit</button>
                         </div>
                         <div class="step-content">
                             <div class="summary-preview">
                                 {{ current_file.summary[:500] }}...
                             </div>
-                            <button class="btn btn-primary btn-lg w-100 mt-3" onclick="generateTranscript()">
-                                <i class="bi bi-chat-dots"></i>
-                                Generate Podcast Script
-                            </button>
                         </div>
                     </div>
-                    {% endif %}
-
-                    <!-- Step 3: Script -->
-                    {% if current_file.transcript and not audio_exists %}
+                    
+                    <!-- Step 3: Generate Podcast (after summary) -->
                     <div class="workflow-step">
                         <div class="step-header">
                             <h3><span class="step-num">3</span> Podcast Script</h3>
+                            {% if current_file.transcript %}
                             <button class="btn btn-sm btn-ghost" onclick="showTranscript()">View/Edit</button>
+                            {% endif %}
                         </div>
                         <div class="step-content">
+                            {% if current_file.transcript %}
                             <div class="transcript-preview">
                                 {{ current_file.transcript[:300] }}...
                             </div>
+                            {% endif %}
                             <button class="btn btn-primary btn-lg w-100 mt-3" onclick="generatePodcast()">
                                 <i class="bi bi-play-circle"></i>
-                                Generate Audio
+                                Generate Podcast Audio
                             </button>
                         </div>
                     </div>
@@ -160,6 +173,7 @@
                     <div class="workflow-step completed">
                         <div class="step-header">
                             <h3><span class="step-num">4</span> Audio Ready</h3>
+                            <button class="btn btn-sm btn-ghost" onclick="showTranscript()">Edit Script</button>
                         </div>
                         <div class="step-content">
                             <div class="audio-player">
@@ -173,6 +187,10 @@
                                     <i class="bi bi-download"></i>
                                     Download
                                 </a>
+                                <button class="btn btn-outline" onclick="generatePodcast()">
+                                    <i bi-arrow-repeat></i>
+                                    Regenerate Audio
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -318,6 +336,12 @@
             }
         });
 
+        // Poll for initial summary task if present
+        const initialTaskId = '{{ initial_task_id }}';
+        if (initialTaskId && initialTaskId !== 'None') {
+            pollTask(initialTaskId, 'summary');
+        }
+
         // Workflow functions
         function generateSummary() {
             showLoading('Generating summary...');
@@ -326,15 +350,8 @@
                 .then(data => pollTask(data.task_id, 'summary'));
         }
 
-        function generateTranscript() {
-            showLoading('Creating podcast script...');
-            fetch('/generate_transcript/{{ current_file.id }}', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => pollTask(data.task_id, 'transcript'));
-        }
-
         function generatePodcast() {
-            showLoading('Generating audio...');
+            showLoading('Generating podcast audio...');
             fetch('/generate_podcast/{{ current_file.id }}', { method: 'POST' })
                 .then(r => r.json())
                 .then(data => pollTask(data.task_id, 'podcast'));
@@ -350,9 +367,21 @@
 
         function saveAndGenerate() {
             const transcript = document.getElementById('transcript-edit').value;
-            // TODO: Save transcript edits if needed
-            closeModal('transcript-modal');
-            generatePodcast();
+            
+            // Save the transcript first
+            fetch('/save_transcript/{{ current_file.id }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ transcript: transcript })
+            })
+            .then(r => r.json())
+            .then(data => {
+                closeModal('transcript-modal');
+                generatePodcast();
+            })
+            .catch(err => {
+                alert('Error saving transcript: ' + err);
+            });
         }
 
         function closeModal(id) {

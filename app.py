@@ -44,6 +44,7 @@ os.makedirs(app.config['GENERATED_AUDIO_FOLDER'], exist_ok=True)
 def index():
     # Get optional file parameter
     file_id = request.args.get('file', type=int)
+    task_id = request.args.get('task_id')  # For tracking auto-summary progress
     current_file = PDFFile.query.get(file_id) if file_id else None
     
     # Get all files for library
@@ -57,7 +58,8 @@ def index():
 
     return render_template('index.html', 
                           all_files=all_files,
-                          current_file=current_file)
+                          current_file=current_file,
+                          initial_task_id=task_id)
 
 @app.route('/create_folder', methods=['POST'])
 def create_folder():
@@ -111,7 +113,17 @@ def upload_file():
         except Exception as e:
             app.logger.error(f"Failed to upload to Ragflow: {e}")
 
-    return redirect(url_for('index'))
+    # Auto-generate summary after upload
+    task_id = str(uuid.uuid4())
+    new_task = Task(id=task_id, status='processing')
+    db.session.add(new_task)
+    db.session.commit()
+    
+    thread = threading.Thread(target=_run_summary_generation, args=(app, task_id, new_file.id))
+    thread.start()
+    
+    # Redirect to file page with summary loading state
+    return redirect(url_for('index', file=new_file.id, task_id=task_id))
 
 def _get_or_upload_file(app, pdf_file):
     """
@@ -292,8 +304,36 @@ def _run_podcast_generation(app, task_id, file_id):
             pdf_file = PDFFile.query.get(file_id)
             settings = get_settings()
 
+            # Auto-generate transcript if it doesn't exist
             if not pdf_file.transcript:
-                raise Exception("Transcript not found for this file.")
+                app.logger.info(f"Task {task_id}: No transcript found, auto-generating...")
+                
+                if not hasattr(app, 'text_client') or not app.text_client:
+                    raise Exception("NanoGPT text client not initialized. Please set API key in settings.")
+
+                transcript_model_name = settings.transcript_model
+                
+                # Add length guidance to prompt
+                length_guidance = {
+                    'short': 'Keep the script brief, approximately 2-3 minutes of dialogue.',
+                    'medium': 'Create a moderate-length script, approximately 5-7 minutes of dialogue.',
+                    'long': 'Create a comprehensive, detailed script approximately 10+ minutes of dialogue.'
+                }
+                transcript_len = getattr(settings, 'transcript_length', 'medium')
+                length_instruction = length_guidance.get(transcript_len, length_guidance['medium'])
+                full_prompt = f"{settings.transcript_prompt}\n\n{length_instruction}"
+                
+                transcript_text = generate_text_with_file(
+                    app.text_client,
+                    transcript_model_name,
+                    pdf_file.text,
+                    full_prompt,
+                    "You are a helpful research assistant that creates engaging podcast scripts from documents."
+                )
+                
+                pdf_file.transcript = transcript_text
+                db.session.commit()
+                app.logger.info(f"Task {task_id}: Auto-generated transcript for file_id {file_id}.")
 
             if not hasattr(app, 'tts_client') or not app.tts_client:
                 raise Exception("DeepInfra TTS client not initialized. Please set API key in settings.")
@@ -364,6 +404,28 @@ def generate_podcast(file_id):
 @app.route('/podcast_status/<task_id>')
 def podcast_status(task_id):
     return _get_task_status_response(task_id)
+
+
+@app.route('/save_transcript/<int:file_id>', methods=['POST'])
+def save_transcript(file_id):
+    """Save edited transcript for a file"""
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    data = request.get_json()
+    
+    if not data or 'transcript' not in data:
+        return jsonify({'error': 'Transcript is required'}), 400
+    
+    pdf_file.transcript = data['transcript']
+    db.session.commit()
+    
+    # Delete existing audio file so user can regenerate
+    mp3_filename = f"dialogue_{file_id}.mp3"
+    mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+    if os.path.exists(mp3_filepath):
+        os.remove(mp3_filepath)
+        app.logger.info(f"Deleted existing audio file for file_id {file_id} after transcript edit.")
+    
+    return jsonify({'success': True})
 
 
 def _generate_chat_response(uploaded_file, history, question, model_name, client, app_logger):
