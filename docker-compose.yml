@@ -3,7 +3,7 @@ services:
   web:
     build: .
     ports:
-      - "8010:8000"
+      - "100.111.201.125:8010:8000"
     volumes:
       - ./uploads:/app/uploads
       - ./generated_audio:/app/generated_audio

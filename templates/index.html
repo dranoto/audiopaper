@@ -30,34 +30,58 @@
 
         <main class="main-content">
             {% if not current_file %}
-            <!-- Empty State / Upload -->
-            <div class="upload-section">
-                <div class="upload-card">
-                    <div class="upload-icon">
-                        <i class="bi bi-file-earmark-pdf"></i>
-                    </div>
-                    <h2>Upload a Research Paper</h2>
-                    <p>Drop your PDF here or click to browse</p>
-                    <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
-                        <input type="file" name="file" id="file-input" accept="application/pdf" hidden>
-                        <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file-input').click()">
-                            <i class="bi bi-upload"></i>
-                            Choose PDF
-                        </button>
-                        
-                        <div class="upload-options mt-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="upload_to_ragflow" name="upload_to_ragflow">
-                                <label class="form-check-label" for="upload_to_ragflow">
-                                    Also upload to Ragflow
-                                </label>
-                            </div>
-                            <select class="form-select form-select-sm mt-2" name="ragflow_dataset" id="ragflow-dataset-select" style="display: none;">
-                                <option value="">Loading datasets...</option>
-                            </select>
+            <!-- Empty State / Upload - Show with library sidebar -->
+            <div class="workflow-container">
+                <div class="upload-section">
+                    <div class="upload-card">
+                        <div class="upload-icon">
+                            <i class="bi bi-file-earmark-pdf"></i>
                         </div>
-                    </form>
-                    <p class="upload-hint">Supported: PDF files</p>
+                        <h2>Upload a Research Paper</h2>
+                        <p>Drop your PDF here or click to browse</p>
+                        <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+                            <input type="file" name="file" id="file-input" accept="application/pdf" hidden>
+                            <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file-input').click()">
+                                <i class="bi bi-upload"></i>
+                                Choose PDF
+                            </button>
+                            
+                            <div class="upload-options mt-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="upload_to_ragflow" name="upload_to_ragflow">
+                                    <label class="form-check-label" for="upload_to_ragflow">
+                                        Also upload to Ragflow
+                                    </label>
+                                </div>
+                                <select class="form-select form-select-sm mt-2" name="ragflow_dataset" id="ragflow-dataset-select" style="display: none;">
+                                    <option value="">Loading datasets...</option>
+                                </select>
+                            </div>
+                        </form>
+                        <p class="upload-hint">Supported: PDF files</p>
+                    </div>
+                </div>
+                
+                <!-- Library Sidebar (always visible) -->
+                <div class="library-sidebar">
+                    <h4>Library</h4>
+                    {% if all_files %}
+                    <div class="library-list">
+                        {% for file in all_files %}
+                        <a href="/?file={{ file.id }}" class="library-item">
+                            <i class="bi bi-file-earmark-text"></i>
+                            <span>{{ file.filename[:25] }}{% if file.filename|length > 25 %}...{% endif %}</span>
+                            {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted small">No papers yet</p>
+                    {% endif %}
+                    <a href="{{ url_for('ragflow_browser') }}" class="btn btn-outline w-100 mt-3">
+                        <i class="bi bi-cloud-download"></i>
+                        Import from Ragflow
+                    </a>
                 </div>
             </div>
             {% else %}
@@ -101,23 +125,7 @@
 
                 <!-- Main Workflow Area -->
                 <div class="workflow-content">
-                    <!-- Step 1: Ingest (Show extracted text) -->
-                    {% if current_file.text and not current_file.summary and not initial_task_id %}
-                    <div class="workflow-step">
-                        <div class="step-header">
-                            <h3><span class="step-num">1</span> Document Ingested</h3>
-                            <p class="step-desc">Your PDF has been processed. Generating summary...</p>
-                        </div>
-                        <div class="step-content">
-                            <div class="text-center">
-                                <div class="spinner-border text-primary" role="status"></div>
-                                <p class="mt-2">Generating summary...</p>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <!-- Summary Loading State -->
+                    <!-- Auto-summary loading state (no file selected yet) -->
                     {% if initial_task_id and not current_file.summary %}
                     <div class="workflow-step">
                         <div class="step-header">
@@ -128,6 +136,38 @@
                                 <div class="spinner-border text-primary" role="status"></div>
                                 <p class="mt-2">Analyzing paper and creating summary...</p>
                             </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- No file selected - show library with options -->
+                    {% if not current_file %}
+                    <div class="workflow-step">
+                        <div class="step-header">
+                            <h3>Your Library</h3>
+                        </div>
+                        <div class="step-content">
+                            {% if all_files %}
+                            <p class="text-muted">Select a paper from the sidebar or upload a new one.</p>
+                            {% else %}
+                            <p class="text-muted">No papers yet. Upload a PDF or import from Ragflow.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- File selected but no summary yet -->
+                    {% if current_file and not current_file.summary and not initial_task_id %}
+                    <div class="workflow-step">
+                        <div class="step-header">
+                            <h3><span class="step-num">2</span> Summary</h3>
+                        </div>
+                        <div class="step-content">
+                            <p class="text-muted">Summary not generated yet.</p>
+                            <button class="btn btn-primary btn-lg w-100" onclick="generateSummary()">
+                                <i class="bi bi-lightning"></i>
+                                Generate Summary
+                            </button>
                         </div>
                     </div>
                     {% endif %}
@@ -222,12 +262,17 @@
                     <div class="library-list">
                         {% for file in all_files %}
                         <a href="/?file={{ file.id }}" class="library-item {% if file.id == current_file.id %}active{% endif %}">
-                            <i class="bi bi-file-earmark-pdf"></i>
-                            <span>{{ file.filename[:25] }}{% if file.filename|length > 25 %}...{% endif %}</span>
+                            <i class="bi bi-file-earmark-text"></i>
+                            <span>{{ file.filename[:20] }}{% if file.filename|length > 20 %}...{% endif %}</span>
+                            {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto" title="Summary ready"></i>{% endif %}
                         </a>
                         {% endfor %}
                     </div>
-                    <button class="btn btn-outline w-100 mt-3" onclick="window.location.href='/'">
+                    <a href="{{ url_for('ragflow_browser') }}" class="btn btn-outline w-100 mt-3">
+                        <i class="bi bi-cloud-download"></i>
+                        Import from Ragflow
+                    </a>
+                    <button class="btn btn-outline w-100 mt-2" onclick="window.location.href='/'">
                         <i class="bi bi-plus-lg"></i>
                         New Upload
                     </button>

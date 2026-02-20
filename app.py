@@ -885,10 +885,20 @@ def ragflow_import(dataset_id, document_id):
         db.session.add(new_file)
         db.session.commit()
         
+        # Auto-generate summary after import
+        task_id = str(uuid.uuid4())
+        new_task = Task(id=task_id, status='processing')
+        db.session.add(new_task)
+        db.session.commit()
+        
+        thread = threading.Thread(target=_run_summary_generation, args=(app, task_id, new_file.id))
+        thread.start()
+        
         return jsonify({
             'success': True,
             'file_id': new_file.id,
-            'filename': doc_name
+            'filename': doc_name,
+            'task_id': task_id
         })
     except Exception as e:
         db.session.rollback()

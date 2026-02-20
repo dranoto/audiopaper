@@ -136,7 +136,7 @@
                         return;
                     }
                     alert(`Imported successfully! Redirecting...`);
-                    window.location.href = `/?file=${data.file_id}`;
+                    window.location.href = `/?file=${data.file_id}&task_id=${data.task_id}`;
                 })
                 .catch(err => alert('Error: ' + err));
         }
