@@ -679,7 +679,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chatInput.value = '';
         chatInput.disabled = true;
-        chatForm.querySelector('button[type="submit"]')?.disabled = true;
+        const submitBtn = chatForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
 
         appendChatMessage(userMessage, 'user');
 

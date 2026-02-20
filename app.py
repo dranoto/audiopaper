@@ -240,17 +240,21 @@ def summarize_stream(file_id):
     from flask import Response, stream_with_context
     from services import generate_text_stream, get_settings
 
-    pdf_file = PDFFile.query.get_or_404(file_id)
+    # Verify file exists first
+    PDFFile.query.get_or_404(file_id)
     settings = get_settings()
 
     if not hasattr(app, 'text_client') or not app.text_client:
         return Response(f"data: {json.dumps({'error': 'Text client not initialized'})}\n\n",
                        mimetype='text/event-stream')
 
-    # Prevent SQLAlchemy from expiring objects after commit
-    db.session.expire_on_commit = False
-
     def generate():
+        # Fetch file inside generator to ensure it's in the current session context
+        pdf_file = PDFFile.query.get(file_id)
+        if not pdf_file:
+            yield f"data: {json.dumps({'type': 'error', 'error': 'File not found'})}\n\n"
+            return
+
         try:
             prompt = settings.summary_prompt
             model_name = settings.summary_model
@@ -478,11 +482,12 @@ def transcript_stream(file_id):
     from flask import Response, stream_with_context
     from services import get_settings
 
-    pdf_file = PDFFile.query.get_or_404(file_id)
+    # Verify file exists
+    PDFFile.query.get_or_404(file_id)
     settings = get_settings()
 
-    # Check if summary exists first
-    if not pdf_file.summary:
+    # Check if summary exists first (need to query again inside generator)
+    if not PDFFile.query.get(file_id).summary:
         return Response(f"data: {json.dumps({'type': 'error', 'error': 'No summary available. Generate summary first.'})}\n\n",
                        mimetype='text/event-stream')
 
@@ -490,16 +495,23 @@ def transcript_stream(file_id):
         return Response(f"data: {json.dumps({'type': 'error', 'error': 'Text client not initialized'})}\n\n",
                        mimetype='text/event-stream')
 
-    # Prevent SQLAlchemy from expiring objects after commit
-    db.session.expire_on_commit = False
-
     def generate():
+        # Fetch file inside generator to ensure it's in the current session context
+        pdf_file = PDFFile.query.get(file_id)
+        if not pdf_file:
+            yield f"data: {json.dumps({'type': 'error', 'error': 'File not found'})}\n\n"
+            return
+
+        if not pdf_file.summary:
+            yield f"data: {json.dumps({'type': 'error', 'error': 'No summary available. Generate summary first.'})}\n\n"
+            return
+
         try:
             prompt = settings.transcript_prompt
             model_name = settings.transcript_model
-            
+
             yield f"data: {json.dumps({'type': 'start'})}\n\n"
-            
+
             full_text = ""
             from services import generate_text_stream
             for token in generate_text_stream(
@@ -511,17 +523,17 @@ def transcript_stream(file_id):
             ):
                 full_text += token
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-            
+
             pdf_file.transcript = full_text
             db.session.commit()
-            
+
             yield f"data: {json.dumps({'type': 'complete', 'transcript': full_text[:500]})}\n\n"
-            
+
         except Exception as e:
             import traceback
             error_msg = str(e) + '\n' + traceback.format_exc()
             yield f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n"
-    
+
     response = Response(stream_with_context(generate()), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['X-Accel-Buffering'] = 'no'
