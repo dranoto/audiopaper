@@ -17,3 +17,4 @@ static/figures/
 
 # macOS
 .DS_Store
+data/
