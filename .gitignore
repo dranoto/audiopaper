@@ -18,3 +18,4 @@ static/figures/
 # macOS
 .DS_Store
 data/
+generated_audio/
