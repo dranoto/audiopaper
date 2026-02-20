@@ -190,6 +190,29 @@ class RagflowClient:
         """Get full text content from a document by combining chunks"""
         chunks = self.get_document_chunks(dataset_id, document_id)
         
+        # If no chunks, try to get the document directly (may not be parsed yet)
+        if not chunks:
+            try:
+                result = self.request('GET', f'/datasets/{dataset_id}/documents/{document_id}')
+                doc_data = result.get('data', {})
+                # Try 'content' field first
+                content = doc_data.get('content', '')
+                if content:
+                    return content
+                # Try 'text' field
+                content = doc_data.get('text', '')
+                if content:
+                    return content
+                # Try 'knowledge' field (sometimes contains parsed text)
+                knowledge = doc_data.get('knowledge', {})
+                if knowledge:
+                    content = knowledge.get('content', '')
+                    if content:
+                        return content
+            except Exception as e:
+                print(f"Could not get raw document content: {e}")
+            return ''
+        
         # Sort by chunk index if available
         chunks.sort(key=lambda x: x.get('chunk_order', 0))
         
