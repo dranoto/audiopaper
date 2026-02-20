@@ -39,13 +39,16 @@ class RagflowClient:
     
     def _enrich_with_pubmed_titles(self, docs):
         """Fetch human-readable titles and publication dates from PubMed for PMC files"""
-        # Extract PMCs from file names like "PMC12527568.md"
+        # Extract PMCs from file names like "PMC12527568.md" or "PMC12527568(1).md"
         # Check both 'name' and 'location' fields
+        import re
         pmcs = []
         for doc in docs:
             name = doc.get('name', '') or doc.get('location', '')
-            if name.startswith('PMC') and name.endswith('.md'):
-                pmc_id = name[3:-3]  # Remove 'PMC' prefix and '.md' suffix
+            # Match PMC followed by digits, optionally with (n) suffix, then .md
+            match = re.match(r'^PMC(\d+)(?:\(\d+\))?\.md$', name)
+            if match:
+                pmc_id = match.group(1)
                 pmcs.append((doc.get('id'), pmc_id))
         
         if not pmcs:
