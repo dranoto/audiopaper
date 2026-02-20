@@ -195,18 +195,9 @@ class RagflowClient:
             try:
                 result = self.request('GET', f'/datasets/{dataset_id}/documents/{document_id}')
                 doc_data = result.get('data', {})
-                # Try 'content' field first
-                content = doc_data.get('content', '')
-                if content:
-                    return content
-                # Try 'text' field
-                content = doc_data.get('text', '')
-                if content:
-                    return content
-                # Try 'knowledge' field (sometimes contains parsed text)
-                knowledge = doc_data.get('knowledge', {})
-                if knowledge:
-                    content = knowledge.get('content', '')
+                # Try various fields that might contain the content
+                for field in ['content', 'text', 'markdown', 'source_text', 'raw_content']:
+                    content = doc_data.get(field, '')
                     if content:
                         return content
             except Exception as e:
@@ -216,10 +207,11 @@ class RagflowClient:
         # Sort by chunk index if available
         chunks.sort(key=lambda x: x.get('chunk_order', 0))
         
-        # Combine all chunk content
+        # Combine all chunk content - try various fields
         content_parts = []
         for chunk in chunks:
-            content = chunk.get('content', '')
+            # Try different content fields
+            content = chunk.get('content') or chunk.get('text') or chunk.get('markdown') or chunk.get('source_text') or ''
             if content:
                 content_parts.append(content)
         
