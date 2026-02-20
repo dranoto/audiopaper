@@ -195,6 +195,16 @@ body {
     gap: 24px;
 }
 
+/* Main content should be in first column */
+.workflow-container > .upload-section,
+.workflow-container > .workflow-content,
+.workflow-container > .file-info-bar,
+.workflow-container > .steps-indicator,
+.workflow-container > .inline-progress,
+.workflow-container > #workflow-steps-container {
+    grid-column: 1;
+}
+
 /* Steps Indicator */
 .steps-indicator {
     display: flex;
@@ -371,9 +381,9 @@ body {
     padding: 20px;
     border: 1px solid var(--border);
     height: fit-content;
-    position: sticky;
-    top: 84px;
-    grid-column: 2;  /* Force to right column */
+    position: sticky !important;
+    top: 84px !important;
+    grid-column: 2 !important;  /* Force to right column */
     align-self: start;
 }
 
