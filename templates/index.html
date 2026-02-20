@@ -486,16 +486,27 @@
 
         // Mobile library toggle
         function toggleLibrary() {
-            // Toggle all library sidebar elements
-            document.querySelectorAll('.library-sidebar').forEach(sidebar => {
+            // On mobile, toggle just one sidebar (they're stacked)
+            // Find any visible sidebar and toggle it
+            const sidebars = document.querySelectorAll('.library-sidebar');
+            let anyVisible = false;
+
+            // Check if any sidebar is currently visible
+            sidebars.forEach(sidebar => {
                 if (sidebar.classList.contains('visible')) {
+                    anyVisible = true;
+                }
+            });
+
+            // Toggle all sidebars to the same state
+            sidebars.forEach(sidebar => {
+                if (anyVisible) {
+                    // Hide all sidebars
                     sidebar.classList.remove('visible');
                     sidebar.classList.add('collapsed');
-                } else if (sidebar.classList.contains('collapsed')) {
-                    sidebar.classList.remove('collapsed');
-                    sidebar.classList.add('visible');
                 } else {
-                    // If neither class is present, show it
+                    // Show all sidebars (they'll overlap on mobile but that's OK)
+                    sidebar.classList.remove('collapsed');
                     sidebar.classList.add('visible');
                 }
             });
@@ -938,11 +949,8 @@
             const useInline = globalInlineMode && hasInlineElements;
 
             if (useInline) {
-                // Only hide workflow steps for summary generation, not for transcript/podcast
-                if (type === 'summary') {
-                    const workflowSteps = document.getElementById('workflow-steps-container');
-                    if (workflowSteps) workflowSteps.style.display = 'none';
-                }
+                // Don't hide workflow steps - keep summary/transcript visible
+                // Just show inline progress for current step
 
                 // Update step number and labels based on task type
                 const stepNumEl = document.getElementById('progress-step-num');
@@ -1010,11 +1018,7 @@
             // Show progress - inline or modal based on mode
             if (inline) {
                 // Inline mode - update the inline progress in workflow area
-                // Hide workflow steps for summary generation
-                if (type === 'summary') {
-                    const workflowSteps = document.getElementById('workflow-steps-container');
-                    if (workflowSteps) workflowSteps.style.display = 'none';
-                }
+                // Don't hide workflow steps - keep summary/transcript visible
 
                 // Show inline-progress div
                 const inlineDiv = document.getElementById('inline-progress');
