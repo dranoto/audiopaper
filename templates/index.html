@@ -594,7 +594,7 @@
         
         function streamTranscript() {
             globalInlineMode = true;
-            showLoading('Creating podcast script...');
+            showLoading('Creating podcast script...', 'transcript');
             
             if (currentEventSource) {
                 currentEventSource.close();
@@ -648,7 +648,7 @@
 
         function generatePodcast() {
             globalInlineMode = true;
-            showLoading('Generating podcast audio...');
+            showLoading('Generating podcast audio...', 'podcast');
             
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -867,9 +867,11 @@
             const useInline = globalInlineMode && hasInlineElements;
 
             if (useInline) {
-                // Hide workflow steps container
-                const workflowSteps = document.getElementById('workflow-steps-container');
-                if (workflowSteps) workflowSteps.style.display = 'none';
+                // Only hide workflow steps for summary generation, not for transcript
+                if (type === 'summary') {
+                    const workflowSteps = document.getElementById('workflow-steps-container');
+                    if (workflowSteps) workflowSteps.style.display = 'none';
+                }
 
                 const titleEl = document.getElementById('progress-title-text');
                 const statusEl = document.getElementById('progress-status-text');
