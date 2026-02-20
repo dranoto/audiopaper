@@ -5,6 +5,22 @@ import re
 import uuid
 import threading
 import io
+
+def get_audio_filename(pdf_file):
+    """Generate a safe audio filename from the PDF file's name"""
+    # Get base name without extension
+    name = pdf_file.filename
+    if name:
+        # Remove extension and sanitize
+        name = os.path.splitext(name)[0]
+        # Keep only alphanumeric, dashes, underscores
+        name = re.sub(r'[^a-zA-Z0-9\-_]', '', name)
+        # Limit length
+        name = name[:40]
+        if name:
+            return f"{name}_{pdf_file.id}.mp3"
+    return f"audio_{pdf_file.id}.mp3"
+
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from pydub import AudioSegment
@@ -53,9 +69,10 @@ def index():
     
     # Check for audio file existence
     for file in all_files:
-        mp3_filename = f"dialogue_{file.id}.mp3"
+        mp3_filename = get_audio_filename(file)
         mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
         file.audio_exists = os.path.exists(mp3_filepath)
+        file.audio_filename = mp3_filename  # Store for template use
 
     return render_template('index.html', 
                           all_files=all_files,
@@ -228,7 +245,7 @@ def summarize_status(task_id):
 def file_content(file_id):
     pdf_file = PDFFile.query.get_or_404(file_id)
     audio_url = None
-    mp3_filename = f"dialogue_{file_id}.mp3"
+    mp3_filename = get_audio_filename(pdf_file)
     mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
     if os.path.exists(mp3_filepath):
         audio_url = url_for('generated_audio', filename=mp3_filename)
@@ -356,7 +373,7 @@ def _run_podcast_generation(app, task_id, file_id):
             )
             
             # Export to MP3
-            mp3_filename = f"dialogue_{file_id}.mp3"
+            mp3_filename = get_audio_filename(pdf_file)
             mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
             combined_audio.export(mp3_filepath, format="mp3")
 
@@ -420,7 +437,7 @@ def save_transcript(file_id):
     db.session.commit()
     
     # Delete existing audio file so user can regenerate
-    mp3_filename = f"dialogue_{file_id}.mp3"
+    mp3_filename = get_audio_filename(pdf_file)
     mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
     if os.path.exists(mp3_filepath):
         os.remove(mp3_filepath)
@@ -623,7 +640,7 @@ def delete_file(file_id):
 
     # Store file paths before deleting the database record
     pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], pdf_file.filename)
-    mp3_filename = f"dialogue_{file_id}.mp3"
+    mp3_filename = get_audio_filename(pdf_file)
     mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
 
     # Delete from database first

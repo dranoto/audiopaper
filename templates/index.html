@@ -245,12 +245,12 @@
                         <div class="step-content">
                             <div class="audio-player">
                                 <audio controls class="w-100">
-                                    <source src="{{ url_for('generated_audio', filename='dialogue_' + current_file.id|string + '.mp3') }}" type="audio/mpeg">
+                                    <source src="{{ url_for('generated_audio', filename=current_file.audio_filename) }}" type="audio/mpeg">
                                     Your browser does not support audio.
                                 </audio>
                             </div>
                             <div class="audio-actions">
-                                <a href="{{ url_for('generated_audio', filename='dialogue_' + current_file.id|string + '.mp3') }}" download class="btn btn-outline">
+                                <a href="{{ url_for('generated_audio', filename=current_file.audio_filename) }}" download class="btn btn-outline">
                                     <i class="bi bi-download"></i>
                                     Download
                                 </a>
