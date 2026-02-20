@@ -93,6 +93,9 @@
     </div>
 
     <script>
+        // Imported document names from server
+        const importedNames = new Set({{ imported_names | tojson }});
+        
         let currentDatasetId = null;
         let currentPageNum = 1;
         let totalDocs = 0;
@@ -131,7 +134,10 @@
                         return;
                     }
                     
-                    const docsHtml = data.documents.map(doc => `
+                    const docsHtml = data.documents.map(doc => {
+                        const docName = doc.name || doc.title || 'Untitled';
+                        const isImported = importedNames.has(docName);
+                        return `
                         <div class="document-item">
                             <div class="document-icon">
                                 <i class="bi bi-file-earmark-text"></i>
@@ -143,11 +149,14 @@
                                     <span><i class="bi bi-collection"></i> ${doc.chunk_count || 0} chunks</span>
                                 </p>
                             </div>
-                            <button class="btn btn-primary btn-sm" onclick="importDoc('${datasetId}', '${doc.id}', '${doc.name}')">
-                                <i class="bi bi-download"></i> Import
-                            </button>
+                            ${isImported 
+                                ? '<button class="btn btn-success btn-sm" disabled><i class="bi bi-check-lg"></i> Imported</button>'
+                                : `<button class="btn btn-primary btn-sm" onclick="importDoc('${datasetId}', '${doc.id}', '${doc.name}')">
+                                    <i class="bi bi-download"></i> Import
+                                   </button>`
+                            }
                         </div>
-                    `).join('');
+                    `}).join('');
                     
                     // Add pagination controls
                     const totalPages = Math.ceil(totalDocs / PAGE_SIZE);

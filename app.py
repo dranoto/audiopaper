@@ -99,6 +99,13 @@ def index():
         mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
         file.audio_exists = os.path.exists(mp3_filepath)
         file.audio_filename = mp3_filename  # Store for template use
+    
+    # Also check for current file
+    if current_file:
+        mp3_filename = get_audio_filename(current_file)
+        mp3_filepath = os.path.join(app.config['GENERATED_AUDIO_FOLDER'], mp3_filename)
+        current_file.audio_exists = os.path.exists(mp3_filepath)
+        current_file.audio_filename = mp3_filename
 
     return render_template('index.html', 
                           all_files=all_files,
@@ -505,7 +512,7 @@ def transcript_stream(file_id):
     def generate():
         try:
             prompt = settings.transcript_prompt
-            model_name = settings.summary_model
+            model_name = settings.transcript_model
             
             yield f"data: {json.dumps({'type': 'start'})}\n\n"
             
@@ -959,7 +966,11 @@ def ragflow_browser():
     except Exception as e:
         return render_template('ragflow_error.html', error=f"Failed to connect to Ragflow: {str(e)}")
     
-    return render_template('ragflow.html', datasets=datasets)
+    # Get all imported files to check for duplicates
+    all_files = PDFFile.query.all()
+    imported_names = {f.filename for f in all_files}
+    
+    return render_template('ragflow.html', datasets=datasets, imported_names=imported_names)
 
 
 @app.route('/ragflow/datasets')
