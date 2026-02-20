@@ -14,7 +14,7 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon.svg') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260220b">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20260220c">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
 </head>
@@ -176,6 +176,8 @@
                     </div>
                     {% endif %}
 
+                    <!-- Regular workflow steps - hidden when inline progress is shown -->
+                    <div id="workflow-steps-container">
                     <!-- No file selected - show library with options -->
                     {% if not current_file %}
                     <div class="workflow-step">
@@ -300,6 +302,7 @@
                             </button>
                         </div>
                     </div>
+                    </div><!-- End workflow-steps-container -->
 
                     <!-- Loading States -->
                     <div id="loading-overlay" class="loading-overlay" style="display: none;">
@@ -509,10 +512,17 @@
         // Global flag for inline mode - must be defined first
         let globalInlineMode = new URL(window.location).searchParams.get('inline') === 'true';
 
+        // Task step map - defined early for use by pollTask
+        const taskStepMap = {
+            'summary': { step: 2, name: 'Summary', icon: 'bi-card-text' },
+            'transcript': { step: 3, name: 'Script', icon: 'bi-chat-dots' },
+            'podcast': { step: 4, name: 'Audio', icon: 'bi-headphones' }
+        };
+
         // Poll for initial summary task if present (but check if already complete)
         const initialTaskId = '{{ initial_task_id }}';
         const currentFileHasSummary = {{ 'true' if current_file and current_file.summary else 'false' }};
-        
+
         // Use global flag
         if (initialTaskId && initialTaskId !== 'None' && !currentFileHasSummary) {
             // Hide modal, use inline progress instead
@@ -729,13 +739,6 @@
             document.getElementById(id).style.display = 'none';
         }
 
-        // Task names and step mapping
-        const taskStepMap = {
-            'summary': { step: 2, name: 'Summary', icon: 'bi-card-text' },
-            'transcript': { step: 3, name: 'Podcast Script', icon: 'bi-mic' },
-            'podcast': { step: 4, name: 'Audio', icon: 'bi-headphones' }
-        };
-
         let currentTaskInterval = null;
 
         function showProgressModal(taskType, message) {
@@ -859,35 +862,44 @@
             // Check if inline progress elements exist
             const inlineDiv = document.getElementById('inline-progress');
             const hasInlineElements = inlineDiv !== null;
-            
+
             // If inline mode but elements don't exist, fall back to modal
             const useInline = globalInlineMode && hasInlineElements;
-            
+
             if (useInline) {
+                // Hide workflow steps container
+                const workflowSteps = document.getElementById('workflow-steps-container');
+                if (workflowSteps) workflowSteps.style.display = 'none';
+
                 const titleEl = document.getElementById('progress-title-text');
                 const statusEl = document.getElementById('progress-status-text');
                 const barEl = document.getElementById('inline-progress-bar');
-                
+
                 if (titleEl) titleEl.textContent = text;
                 if (statusEl) statusEl.textContent = 'Please wait...';
                 if (barEl) {
                     barEl.classList.remove('success', 'error');
                     barEl.style.width = '10%';
                 }
-                
+
                 // Also ensure inline progress is visible
                 if (inlineDiv) {
                     inlineDiv.style.display = 'block';
                 }
-                
+
                 // Hide modal if open
                 const modal = document.getElementById('progress-modal');
                 if (modal) modal.classList.add('hidden');
                 return;
             }
-            
+
             // Otherwise use modal
             showProgressModal(type, text);
+        }
+
+        function showWorkflowSteps() {
+            const workflowSteps = document.getElementById('workflow-steps-container');
+            if (workflowSteps) workflowSteps.style.display = 'block';
         }
 
         function hideLoading() {

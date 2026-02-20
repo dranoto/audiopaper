@@ -52,13 +52,13 @@ function queueRenderPage(num) {
     }
 }
 
-document.getElementById('prev').addEventListener('click', () => {
+document.getElementById('prev')?.addEventListener('click', () => {
     if (pageNum <= 1) return;
     pageNum--;
     queueRenderPage(pageNum);
 });
 
-document.getElementById('next').addEventListener('click', () => {
+document.getElementById('next')?.addEventListener('click', () => {
     if (pageNum >= pdfDoc.numPages) return;
     pageNum++;
     queueRenderPage(pageNum);
