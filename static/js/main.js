@@ -570,12 +570,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileList = document.getElementById('file-list');
     const appContainer = document.getElementById('app-container');
 
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-        appContainer.classList.toggle('sidebar-collapsed');
+    sidebarToggle?.addEventListener('click', () => {
+        sidebar?.classList.toggle('collapsed');
+        appContainer?.classList.toggle('sidebar-collapsed');
     });
 
-    fileList.addEventListener('click', (event) => {
+    fileList?.addEventListener('click', (event) => {
         const folderToggle = event.target.closest('.folder-toggle');
         const fileItem = event.target.closest('.file-item');
         const actionButton = event.target.closest('.file-action-button, .folder-action-button');
@@ -672,12 +672,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        if (!chatInput || !chatForm) return;
+
         const userMessage = chatInput.value.trim();
         if (!userMessage) return;
 
         chatInput.value = '';
         chatInput.disabled = true;
-        chatForm.querySelector('button[type="submit"]').disabled = true;
+        chatForm.querySelector('button[type="submit"]')?.disabled = true;
 
         appendChatMessage(userMessage, 'user');
 
@@ -713,13 +715,15 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Chat error:', error);
             assistantMessageContent.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
         } finally {
-            chatInput.disabled = false;
-            chatForm.querySelector('button[type="submit"]').disabled = false;
-            chatInput.focus();
+            if (chatInput) {
+                chatInput.disabled = false;
+                chatInput.focus();
+            }
+            chatForm?.querySelector('button[type="submit"]')?.disabled = false;
         }
     }
 
-    chatForm.addEventListener('submit', handleChatSubmit);
+    chatForm?.addEventListener('submit', handleChatSubmit);
 
     // --- Settings Page Specific Logic ---
     if (document.querySelector('body.settings-page')) {

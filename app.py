@@ -239,22 +239,25 @@ def summarize_stream(file_id):
     """Streaming SSE endpoint for summary generation"""
     from flask import Response, stream_with_context
     from services import generate_text_stream, get_settings
-    
+
     pdf_file = PDFFile.query.get_or_404(file_id)
     settings = get_settings()
-    
+
     if not hasattr(app, 'text_client') or not app.text_client:
-        return Response(f"data: {json.dumps({'error': 'Text client not initialized'})}\n\n", 
+        return Response(f"data: {json.dumps({'error': 'Text client not initialized'})}\n\n",
                        mimetype='text/event-stream')
-    
+
+    # Prevent SQLAlchemy from expiring objects after commit
+    db.session.expire_on_commit = False
+
     def generate():
         try:
             prompt = settings.summary_prompt
             model_name = settings.summary_model
-            
+
             # Send start event
             yield f"data: {json.dumps({'type': 'start'})}\n\n"
-            
+
             full_text = ""
             for token in generate_text_stream(
                 app.text_client,
@@ -265,17 +268,18 @@ def summarize_stream(file_id):
             ):
                 full_text += token
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-            
+
             # Save the summary
             pdf_file.summary = full_text
             db.session.commit()
-            
+
             # Send complete event
             yield f"data: {json.dumps({'type': 'complete', 'summary': full_text[:500]})}\n\n"
-            
+
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-    
+            import traceback
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e) + '\\n' + traceback.format_exc()})}\n\n"
+
     response = Response(stream_with_context(generate()), mimetype='text/event-stream')
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['X-Accel-Buffering'] = 'no'
@@ -472,19 +476,22 @@ def transcript_stream(file_id):
     """Streaming SSE endpoint for transcript generation"""
     from flask import Response, stream_with_context
     from services import get_settings
-    
+
     pdf_file = PDFFile.query.get_or_404(file_id)
     settings = get_settings()
-    
+
     # Check if summary exists first
     if not pdf_file.summary:
-        return Response(f"data: {json.dumps({'type': 'error', 'error': 'No summary available. Generate summary first.'})}\n\n", 
+        return Response(f"data: {json.dumps({'type': 'error', 'error': 'No summary available. Generate summary first.'})}\n\n",
                        mimetype='text/event-stream')
-    
+
     if not hasattr(app, 'text_client') or not app.text_client:
-        return Response(f"data: {json.dumps({'type': 'error', 'error': 'Text client not initialized'})}\n\n", 
+        return Response(f"data: {json.dumps({'type': 'error', 'error': 'Text client not initialized'})}\n\n",
                        mimetype='text/event-stream')
-    
+
+    # Prevent SQLAlchemy from expiring objects after commit
+    db.session.expire_on_commit = False
+
     def generate():
         try:
             prompt = settings.transcript_prompt
