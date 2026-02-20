@@ -889,10 +889,13 @@ def ragflow_import(dataset_id, document_id):
         # Get document content from Ragflow
         content = client.get_document_content(dataset_id, document_id)
         
-        # Get document info
+        # Get document info (list_documents enriches with PubMed titles)
         documents, _ = client.list_documents(dataset_id, page=1, size=100)
         doc_info = next((d for d in documents if d.get('id') == document_id), {})
-        doc_name = doc_info.get('name', 'Imported Document')
+        
+        # Use title if available, otherwise fall back to filename
+        doc_title = doc_info.get('title', '') or doc_info.get('name', 'Imported Document')
+        doc_name = doc_title if doc_title and doc_title != 'Imported Document' else doc_info.get('name', 'Imported Document')
         
         # Create new PDFFile entry (we store text content since no actual PDF)
         new_file = PDFFile(
