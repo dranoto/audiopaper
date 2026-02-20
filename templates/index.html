@@ -303,7 +303,25 @@
                 </button>
             </div>
             <div class="modal-body">
-                <p id="summary-text">{{ current_file.summary if current_file.summary else 'No summary yet.' }}</p>
+                <div id="summary-text" style="white-space: pre-wrap; line-height: 1.6;">{{ current_file.summary if current_file.summary else 'No summary yet.' }}</div>
+                <script>
+                    // Simple markdown strip for summary display
+                    (function() {
+                        const el = document.getElementById('summary-text');
+                        if (el) {
+                            let text = el.innerText || el.textContent || '';
+                            // Remove common markdown
+                            text = text.replace(/^#+\s*/gm, '');  // Headers
+                            text = text.replace(/\*\*(.+?)\*\*/g, '$1');  // Bold
+                            text = text.replace(/\*(.+?)\*/g, '$1');  // Italic
+                            text = text.replace(/`(.+?)`/g, '$1');  // Code
+                            text = text.replace(/\[(.+?)\]\(.+?\)/g, '$1');  // Links
+                            text = text.replace(/^[-*+]\s+/gm, '');  // Lists
+                            text = text.replace(/^\d+\.\s+/gm, '');  // Numbered lists
+                            el.textContent = text;
+                        }
+                    })();
+                </script>
             </div>
         </div>
     </div>
@@ -487,8 +505,10 @@
         }
 
         function pollTask(taskId, type) {
+            // Fix: route is summarize_status not summary_status
+            const statusType = (type === 'summary') ? 'summarize' : type;
             const interval = setInterval(() => {
-                fetch('/' + type + '_status/' + taskId)
+                fetch('/' + statusType + '_status/' + taskId)
                     .then(r => r.json())
                     .then(data => {
                         if (data.status === 'complete') {
