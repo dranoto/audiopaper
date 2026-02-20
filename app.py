@@ -46,8 +46,9 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['GENERATED_AUDIO_FOLDER'] = 'generated_audio'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite3'
-app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME', None)  # Don't set default, let Flask determine
+app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME', 'localhost:8010')
 app.config['PREFERRED_URL_SCHEME'] = 'http'
+app.config['APPLICATION_ROOT'] = '/'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 ALLOWED_EXTENSIONS = {'pdf'}
 
