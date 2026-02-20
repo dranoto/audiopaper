@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Turn research papers into audio podcasts">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="AudioPaper">
     <title>AudioPaper</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/icon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon.svg') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -132,16 +140,31 @@
 
                 <!-- Main Workflow Area -->
                 <div class="workflow-content">
-                    <!-- Auto-summary loading state (no file selected yet) -->
-                    {% if initial_task_id and not current_file.summary %}
-                    <div class="workflow-step">
+                    <!-- Progress state - shows during initial import OR when user manually generates -->
+                    {% if current_file and not current_file.summary %}
+                    <div class="workflow-step" id="inline-progress" style="display: none;">
                         <div class="step-header">
-                            <h3><span class="step-num">2</span> Generating Summary</h3>
+                            <h3><span class="step-num">2</span> <span id="progress-title-text">Generating Summary</span></h3>
                         </div>
                         <div class="step-content">
-                            <div class="text-center">
-                                <div class="spinner-border text-primary" role="status"></div>
-                                <p class="mt-2">Analyzing paper and creating summary...</p>
+                            <div class="inline-progress-container">
+                                <div class="progress-steps-inline mb-3">
+                                    <span class="step-dot active"></span>
+                                    <span class="step-label">Ingest</span>
+                                    <span class="step-line"></span>
+                                    <span class="step-dot active"></span>
+                                    <span class="step-label">Summary</span>
+                                    <span class="step-line"></span>
+                                    <span class="step-dot"></span>
+                                    <span class="step-label">Script</span>
+                                    <span class="step-line"></span>
+                                    <span class="step-dot"></span>
+                                    <span class="step-label">Audio</span>
+                                </div>
+                                <div class="progress-bar-container" style="max-width: 400px; margin: 0 auto;">
+                                    <div id="inline-progress-bar" class="progress-bar" style="width: 10%;"></div>
+                                </div>
+                                <p id="progress-status-text" class="text-muted mt-2 text-center">Analyzing paper and creating summary...</p>
                             </div>
                         </div>
                     </div>
@@ -277,6 +300,30 @@
                         <div class="spinner"></div>
                         <p id="loading-text">Processing...</p>
                     </div>
+
+                    <!-- Progress Modal -->
+                    <div id="progress-modal" class="progress-modal hidden">
+                        <div class="progress-card">
+                            <div id="progress-icon" class="progress-icon processing">
+                                <i class="bi bi-hourglass-split"></i>
+                            </div>
+                            <h3 id="progress-title" class="progress-title">Processing...</h3>
+                            <p id="progress-subtitle" class="progress-subtitle">Please wait</p>
+                            <div class="progress-steps" id="progress-steps">
+                                <div class="progress-step active" data-step="1" title="Ingest"></div>
+                                <div class="progress-step" data-step="2" title="Summary"></div>
+                                <div class="progress-step" data-step="3" title="Script"></div>
+                                <div class="progress-step" data-step="4" title="Audio"></div>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div id="progress-bar" class="progress-bar"></div>
+                            </div>
+                            <p id="progress-status" class="text-muted small">Step 1 of 4</p>
+                            <button id="progress-cancel" class="btn btn-ghost btn-sm mt-3" onclick="cancelCurrentTask()">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Sidebar: File Library -->
@@ -305,6 +352,11 @@
                         New Upload
                     </button>
                 </div>
+
+                <!-- Mobile Library Toggle -->
+                <button class="btn btn-primary library-toggle" onclick="toggleLibrary()">
+                    <i class="bi bi-collection"></i>
+                </button>
             </div>
             {% endif %}
         </main>
@@ -423,48 +475,167 @@
             }
         });
 
-        // Poll for initial summary task if present
-        const initialTaskId = '{{ initial_task_id }}';
-        if (initialTaskId && initialTaskId !== 'None') {
-            pollTask(initialTaskId, 'summary');
+        // Mobile library toggle
+        function toggleLibrary() {
+            const sidebar = document.querySelector('.library-sidebar');
+            sidebar.classList.toggle('collapsed');
         }
 
-        // Workflow functions
-        function generateSummary() {
+        // Initialize mobile library as collapsed
+        if (window.innerWidth <= 768) {
+            document.querySelector('.library-sidebar')?.classList.add('collapsed');
+        }
+
+        // Global flag for inline mode - must be defined first
+        let globalInlineMode = new URL(window.location).searchParams.get('inline') === 'true';
+
+        // Poll for initial summary task if present (but check if already complete)
+        const initialTaskId = '{{ initial_task_id }}';
+        const currentFileHasSummary = {{ 'true' if current_file and current_file.summary else 'false' }};
+        
+        // Use global flag
+        if (initialTaskId && initialTaskId !== 'None' && !currentFileHasSummary) {
+            // Hide modal, use inline progress instead
+            if (globalInlineMode) {
+                document.getElementById('progress-modal')?.classList.add('hidden');
+            }
+            pollTask(initialTaskId, 'summary', globalInlineMode);
+        } else if (currentFileHasSummary && initialTaskId) {
+            // Summary already exists, just clear the task_id from URL
+            const url = new URL(window.location);
+            url.searchParams.delete('task_id');
+            url.searchParams.delete('inline');
+            window.history.replaceState({}, '', url);
+        }
+
+        // Streaming support using SSE
+        let currentEventSource = null;
+        
+        function streamSummary() {
+            globalInlineMode = true;
             showLoading('Generating summary...');
-            fetch('/summarize_file/{{ current_file.id }}', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => pollTask(data.task_id, 'summary'));
+            
+            // Close any existing stream
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+            
+            const statusEl = document.getElementById('progress-status-text');
+            const barEl = document.getElementById('inline-progress-bar');
+            let fullText = '';
+            
+            currentEventSource = new EventSource('/summarize_stream/{{ current_file.id }}');
+            
+            currentEventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'token') {
+                    fullText += data.content;
+                    // Update progress based on text length (simulated)
+                    if (barEl && fullText.length > 50) {
+                        const progress = Math.min(10 + (fullText.length / 10), 90);
+                        barEl.style.width = progress + '%';
+                    }
+                    if (statusEl) {
+                        statusEl.textContent = `Generating... ${fullText.length} chars`;
+                    }
+                } else if (data.type === 'complete') {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                    if (barEl) {
+                        barEl.className = 'progress-bar success';
+                        barEl.style.width = '100%';
+                    }
+                    if (statusEl) statusEl.textContent = 'Complete! Loading...';
+                    setTimeout(() => window.location.reload(), 1000);
+                } else if (data.type === 'error') {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                    showInlineError('summary', data.error);
+                }
+            };
+            
+            currentEventSource.onerror = function() {
+                currentEventSource.close();
+                currentEventSource = null;
+                showInlineError('summary', 'Connection error');
+            };
+        }
+        
+        function streamTranscript() {
+            globalInlineMode = true;
+            showLoading('Creating podcast script...');
+            
+            if (currentEventSource) {
+                currentEventSource.close();
+            }
+            
+            const statusEl = document.getElementById('progress-status-text');
+            const barEl = document.getElementById('inline-progress-bar');
+            let fullText = '';
+            
+            currentEventSource = new EventSource('/transcript_stream/{{ current_file.id }}');
+            
+            currentEventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'token') {
+                    fullText += data.content;
+                    if (barEl && fullText.length > 50) {
+                        const progress = Math.min(10 + (fullText.length / 10), 90);
+                        barEl.style.width = progress + '%';
+                    }
+                    if (statusEl) {
+                        statusEl.textContent = `Generating script... ${fullText.length} chars`;
+                    }
+                } else if (data.type === 'complete') {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                    if (barEl) {
+                        barEl.className = 'progress-bar success';
+                        barEl.style.width = '100%';
+                    }
+                    if (statusEl) statusEl.textContent = 'Complete! Loading...';
+                    setTimeout(() => window.location.reload(), 1000);
+                } else if (data.type === 'error') {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                    showInlineError('transcript', data.error);
+                }
+            };
+            
+            currentEventSource.onerror = function() {
+                currentEventSource.close();
+                currentEventSource = null;
+                showInlineError('transcript', 'Connection error');
+            };
+        }
+
+        // Legacy workflow functions (keep for podcast which doesn't have streaming yet)
+        function generateSummary() {
+            streamSummary();
         }
 
         function generatePodcast() {
+            globalInlineMode = true;
             showLoading('Generating podcast audio...');
             fetch('/generate_podcast/{{ current_file.id }}', { method: 'POST' })
                 .then(r => r.json())
-                .then(data => pollTask(data.task_id, 'podcast'));
+                .then(data => pollTask(data.task_id, 'podcast', true));
         }
 
         function generateTranscript() {
-            showLoading('Creating podcast script...');
-            fetch('/generate_transcript/{{ current_file.id }}', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => pollTask(data.task_id, 'transcript'));
+            streamTranscript();
         }
 
         function regenerateSummary() {
             if (!confirm('Regenerate summary?')) return;
-            showLoading('Regenerating summary...');
-            fetch('/summarize_file/{{ current_file.id }}', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => pollTask(data.task_id, 'summary'));
+            streamSummary();
         }
 
         function regenerateTranscript() {
             if (!confirm('Regenerate podcast script?')) return;
-            showLoading('Regenerating script...');
-            fetch('/generate_transcript/{{ current_file.id }}', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => pollTask(data.task_id, 'transcript'));
+            streamTranscript();
         }
 
         function deleteFile(fileId) {
@@ -522,33 +693,281 @@
             document.getElementById(id).style.display = 'none';
         }
 
-        function showLoading(text) {
-            document.getElementById('loading-text').textContent = text;
-            document.getElementById('loading-overlay').style.display = 'flex';
+        // Task names and step mapping
+        const taskStepMap = {
+            'summary': { step: 2, name: 'Summary', icon: 'bi-card-text' },
+            'transcript': { step: 3, name: 'Podcast Script', icon: 'bi-mic' },
+            'podcast': { step: 4, name: 'Audio', icon: 'bi-headphones' }
+        };
+
+        let currentTaskInterval = null;
+
+        function showProgressModal(taskType, message) {
+            // If inline mode, don't show modal
+            if (globalInlineMode) {
+                showLoading(message, taskType);
+                return;
+            }
+            
+            const modal = document.getElementById('progress-modal');
+            const title = document.getElementById('progress-title');
+            const subtitle = document.getElementById('progress-subtitle');
+            const icon = document.getElementById('progress-icon');
+            const bar = document.getElementById('progress-bar');
+            const status = document.getElementById('progress-status');
+            const cancelBtn = document.getElementById('progress-cancel');
+            const steps = document.querySelectorAll('.progress-step');
+
+            const taskInfo = taskStepMap[taskType] || { step: 1, name: taskType, icon: 'bi-gear' };
+
+            // Update title and subtitle
+            title.textContent = message || `Generating ${taskInfo.name}...`;
+            subtitle.textContent = taskInfo.name;
+
+            // Set icon
+            icon.className = 'progress-icon processing';
+            icon.innerHTML = `<i class="bi ${taskInfo.icon}"></i>`;
+
+            // Reset progress
+            bar.className = 'progress-bar';
+            bar.style.width = '10%';
+
+            // Update step indicators
+            steps.forEach((s, i) => {
+                s.className = 'progress-step';
+                if (i + 1 < taskInfo.step) {
+                    s.classList.add('completed');
+                } else if (i + 1 === taskInfo.step) {
+                    s.classList.add('active');
+                }
+            });
+
+            status.textContent = `Step ${taskInfo.step} of 4`;
+            cancelBtn.style.display = 'inline-flex';
+
+            modal.classList.remove('hidden');
+        }
+
+        function updateProgress(taskType, progress, message) {
+            const bar = document.getElementById('progress-bar');
+            const title = document.getElementById('progress-title');
+            const status = document.getElementById('progress-status');
+
+            if (progress !== undefined) {
+                bar.style.width = progress + '%';
+            }
+            if (message) {
+                title.textContent = message;
+            }
+        }
+
+        function showProgressSuccess(taskType) {
+            const modal = document.getElementById('progress-modal');
+            const title = document.getElementById('progress-title');
+            const subtitle = document.getElementById('progress-subtitle');
+            const icon = document.getElementById('progress-icon');
+            const bar = document.getElementById('progress-bar');
+            const cancelBtn = document.getElementById('progress-cancel');
+
+            const taskInfo = taskStepMap[taskType] || { step: 1, name: taskType };
+
+            title.textContent = `${taskInfo.name} Complete!`;
+            subtitle.textContent = 'Redirecting...';
+            icon.className = 'progress-icon success';
+            icon.innerHTML = '<i class="bi bi-check-lg"></i>';
+            bar.className = 'progress-bar success';
+            bar.style.width = '100%';
+            cancelBtn.style.display = 'none';
+
+            // Auto close and redirect WITHOUT task_id to break the polling loop
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                // Get current file_id from URL (if any) but strip task_id
+                const url = new URL(window.location);
+                const fileId = url.searchParams.get('file');
+                const newUrl = fileId ? `/?file=${fileId}` : '/';
+                window.location.href = newUrl;
+            }, 1500);
+        }
+
+        function showProgressError(taskType, error) {
+            const modal = document.getElementById('progress-modal');
+            const title = document.getElementById('progress-title');
+            const subtitle = document.getElementById('progress-subtitle');
+            const icon = document.getElementById('progress-icon');
+            const bar = document.getElementById('progress-bar');
+            const cancelBtn = document.getElementById('progress-cancel');
+
+            const taskInfo = taskStepMap[taskType] || { step: 1, name: taskType };
+
+            title.textContent = 'Error';
+            subtitle.textContent = error || 'An error occurred';
+            icon.className = 'progress-icon error';
+            icon.innerHTML = '<i class="bi bi-exclamation-lg"></i>';
+            bar.className = 'progress-bar error';
+            bar.style.width = '100%';
+            cancelBtn.textContent = 'Close';
+            cancelBtn.onclick = () => modal.classList.add('hidden');
+        }
+
+        function hideProgressModal() {
+            document.getElementById('progress-modal').classList.add('hidden');
+        }
+
+        function showLoading(text, type = 'summary') {
+            // If inline mode and elements exist, use inline
+            if (globalInlineMode) {
+                const titleEl = document.getElementById('progress-title-text');
+                const statusEl = document.getElementById('progress-status-text');
+                const barEl = document.getElementById('inline-progress-bar');
+                
+                if (titleEl) titleEl.textContent = text;
+                if (statusEl) statusEl.textContent = 'Please wait...';
+                if (barEl) {
+                    barEl.classList.remove('success', 'error');
+                    barEl.style.width = '10%';
+                }
+                
+                // Also ensure inline progress is visible
+                const inlineDiv = document.getElementById('inline-progress');
+                if (inlineDiv) {
+                    inlineDiv.style.display = 'block';
+                }
+                
+                // Hide modal if open
+                const modal = document.getElementById('progress-modal');
+                if (modal) modal.classList.add('hidden');
+                return;
+            }
+            
+            // Otherwise use modal
+            showProgressModal(type, text);
         }
 
         function hideLoading() {
-            document.getElementById('loading-overlay').style.display = 'none';
+            // Legacy - now handled by progress modal
         }
 
-        function pollTask(taskId, type) {
-            // Fix: route is summarize_status not summary_status
+        function cancelCurrentTask() {
+            if (currentTaskInterval) {
+                clearInterval(currentTaskInterval);
+                currentTaskInterval = null;
+            }
+            hideProgressModal();
+        }
+
+        function pollTask(taskId, type, inline = null) {
+            // Use global inline mode if not explicitly specified
+            if (inline === null) {
+                inline = globalInlineMode;
+            }
+            
             const statusType = (type === 'summary') ? 'summarize' : type;
-            const interval = setInterval(() => {
+
+            // Show progress - inline or modal based on mode
+            if (inline) {
+                // Inline mode - update the inline progress in workflow area
+                const titleEl = document.getElementById('progress-title-text');
+                const statusEl = document.getElementById('progress-status-text');
+                const barEl = document.getElementById('inline-progress-bar');
+                if (titleEl) titleEl.textContent = `Generating ${taskStepMap[type]?.name || type}...`;
+                if (statusEl) statusEl.textContent = 'Please wait while we analyze the paper...';
+                if (barEl) barEl.style.width = '10%';
+            } else {
+                // Modal mode - show the progress modal
+                showProgressModal(type, `Generating ${taskStepMap[type]?.name || type}...`);
+            }
+
+            currentTaskInterval = setInterval(() => {
                 fetch('/' + statusType + '_status/' + taskId)
                     .then(r => r.json())
                     .then(data => {
                         if (data.status === 'complete') {
-                            clearInterval(interval);
-                            hideLoading();
-                            window.location.reload();
+                            clearInterval(currentTaskInterval);
+                            currentTaskInterval = null;
+                            if (inline) {
+                                showInlineSuccess(type);
+                            } else {
+                                showProgressSuccess(type);
+                            }
                         } else if (data.status === 'error') {
-                            clearInterval(interval);
-                            hideLoading();
-                            alert('Error: ' + (data.result?.error || 'Unknown error'));
+                            clearInterval(currentTaskInterval);
+                            currentTaskInterval = null;
+                            if (inline) {
+                                showInlineError(type, data.result?.error || 'Unknown error');
+                            } else {
+                                showProgressError(type, data.result?.error || 'Unknown error');
+                            }
+                        } else {
+                            // Update progress
+                            if (inline) {
+                                const barEl = document.getElementById('inline-progress-bar');
+                                const current = parseInt(barEl?.style.width) || 10;
+                                if (barEl && current < 85) {
+                                    barEl.style.width = (current + 15) + '%';
+                                }
+                            } else {
+                                const current = parseInt(document.getElementById('progress-bar')?.style.width) || 10;
+                                if (current < 90) {
+                                    updateProgress(type, Math.min(current + 15, 85));
+                                }
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        clearInterval(currentTaskInterval);
+                        currentTaskInterval = null;
+                        if (inline) {
+                            showInlineError(type, 'Connection error');
+                        } else {
+                            showProgressError(type, 'Connection error');
                         }
                     });
-            }, 2000);
+            }, 3000);
+        }
+
+        function showInlineSuccess(taskType) {
+            const barEl = document.getElementById('inline-progress-bar');
+            const titleEl = document.getElementById('progress-title-text');
+            const statusEl = document.getElementById('progress-status-text');
+            
+            if (barEl) {
+                barEl.className = 'progress-bar success';
+                barEl.style.width = '100%';
+            }
+            if (titleEl) titleEl.textContent = 'Summary Complete!';
+            if (statusEl) statusEl.textContent = 'Loading your paper...';
+            
+            // Clear URL params and reload
+            setTimeout(() => {
+                const url = new URL(window.location);
+                url.searchParams.delete('task_id');
+                url.searchParams.delete('inline');
+                window.location.href = url.toString();
+            }, 1500);
+        }
+
+        function showInlineError(taskType, error) {
+            const barEl = document.getElementById('inline-progress-bar');
+            const titleEl = document.getElementById('progress-title-text');
+            const statusEl = document.getElementById('progress-status-text');
+            
+            if (barEl) {
+                barEl.className = 'progress-bar error';
+                barEl.style.width = '100%';
+            }
+            if (titleEl) titleEl.textContent = 'Error';
+            if (statusEl) statusEl.textContent = error;
+            
+            // Add retry button
+            const container = document.querySelector('.inline-progress-container');
+            if (container) {
+                const retryBtn = document.createElement('button');
+                retryBtn.className = 'btn btn-primary mt-2';
+                retryBtn.textContent = 'Try Again';
+                retryBtn.onclick = () => window.location.reload();
+                container.appendChild(retryBtn);
+            }
         }
 
         // Chat functions
@@ -631,6 +1050,19 @@
             div.innerHTML = `<p>${content.replace(/\n/g, '<br>')}</p>`;
             messagesDiv.appendChild(div);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('{{ url_for("static", filename="service-worker.js") }}')
+                    .then((registration) => {
+                        console.log('AudioPaper SW registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.log('AudioPaper SW registration failed:', error);
+                    });
+            });
         }
     </script>
 </body>

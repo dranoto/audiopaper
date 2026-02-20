@@ -88,6 +88,8 @@ body {
     border: none;
     cursor: pointer;
     transition: all 0.2s;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .btn-primary {
@@ -438,7 +440,144 @@ body {
     font-size: 14px;
 }
 
-/* Loading Overlay */
+/* Progress Modal - Centered overlay for task progress */
+.progress-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 20px;
+    backdrop-filter: blur(4px);
+}
+
+.progress-modal.hidden {
+    display: none;
+}
+
+.progress-card {
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    padding: 32px;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.progress-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+}
+
+.progress-icon.processing {
+    background: var(--accent-light);
+    color: var(--accent);
+}
+
+.progress-icon.success {
+    background: var(--success-light);
+    color: var(--success);
+}
+
+.progress-icon.error {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.progress-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.progress-subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 24px;
+}
+
+.progress-bar-container {
+    background: var(--bg-tertiary);
+    border-radius: 100px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 100px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-bar.success {
+    background: var(--success);
+}
+
+.progress-bar.error {
+    background: #dc2626;
+}
+
+.progress-steps {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.progress-step {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+}
+
+.progress-step.active {
+    background: var(--accent);
+    animation: pulse 1.5s infinite;
+}
+
+.progress-step.completed {
+    background: var(--success);
+}
+
+.progress-step.failed {
+    background: #dc2626;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Legacy loading overlay - kept for compatibility */
 .loading-overlay {
     position: fixed;
     bottom: 24px;
@@ -455,23 +594,44 @@ body {
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
-.spinner {
-    width: 48px;
-    height: 48px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
+/* Inline Progress (for imports) */
+.inline-progress-container {
+    padding: 20px;
+}
+
+.progress-steps-inline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.progress-steps-inline .step-dot {
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    background: var(--border);
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
+.progress-steps-inline .step-dot.active {
+    background: var(--accent);
+    animation: pulse 1.5s infinite;
 }
 
-.loading-overlay p {
-    margin-top: 16px;
+.progress-steps-inline .step-dot.completed {
+    background: var(--success);
+}
+
+.progress-steps-inline .step-line {
+    flex: 1;
+    max-width: 40px;
+    height: 2px;
+    background: var(--border);
+}
+
+.progress-steps-inline .step-label {
+    font-size: 12px;
     color: var(--text-secondary);
-    font-size: 14px;
 }
 
 /* Modal */
@@ -551,24 +711,161 @@ body {
     .workflow-container {
         grid-template-columns: 1fr;
     }
-    
+
     .library-sidebar {
-        position: static;
-        order: -1;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        max-height: 40vh;
+        overflow-y: auto;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+        padding: 16px;
     }
-    
+
+    .library-sidebar.collapsed {
+        max-height: 56px;
+        overflow: hidden;
+    }
+
+    .library-toggle {
+        display: flex !important;
+        position: fixed;
+        bottom: 16px;
+        right: 16px;
+        z-index: 101;
+        border-radius: 50%;
+        width: 56px;
+        height: 56px;
+        padding: 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
     .steps-indicator {
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 4px;
+        padding: 8px;
     }
-    
+
+    .step {
+        flex: 1 1 40%;
+        min-width: 60px;
+    }
+
     .step-line {
         display: none;
     }
-    
+
+    .step-number {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+
+    .step-label {
+        font-size: 11px;
+    }
+
     .upload-card {
         padding: 40px 24px;
     }
+
+    /* Mobile-friendly touch targets */
+    .btn {
+        min-height: 48px;
+        padding: 12px 20px;
+        font-size: 16px;
+    }
+
+    .btn-sm, .btn-ghost.btn-sm {
+        min-height: 40px;
+        min-width: 40px;
+        padding: 8px 12px;
+    }
+
+    /* Larger form inputs */
+    input, select, textarea {
+        font-size: 16px;
+        min-height: 48px;
+    }
+
+    /* Mobile header */
+    .app-header {
+        padding: 0 12px;
+    }
+
+    .logo span {
+        display: none;
+    }
+
+    .header-actions .btn-ghost {
+        padding: 8px;
+    }
+
+    /* Full-width buttons on mobile */
+    .w-100-mobile {
+        width: 100%;
+    }
+
+    /* Progress modal optimized for mobile */
+    .progress-card {
+        padding: 24px 20px;
+        margin: 16px;
+    }
+
+    .progress-icon {
+        width: 56px;
+        height: 56px;
+        font-size: 24px;
+    }
+
+    .progress-title {
+        font-size: 18px;
+    }
+
+    /* Chat improvements */
+    .chat-modal .modal-content {
+        margin: 0;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    /* Workflow content padding for bottom nav */
+    .workflow-content {
+        padding-bottom: 80px;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .step-label {
+        display: none;
+    }
+
+    .step {
+        flex: 1 1 25%;
+    }
+
+    .file-info-bar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .filename {
+        font-size: 14px;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+/* Library toggle button (mobile) */
+.library-toggle {
+    display: none;
 }
 
 /* Page Header */

@@ -217,6 +217,33 @@ def generate_text_with_file(text_client, model, file_content, prompt, system_pro
     return response.choices[0].message.content
 
 
+def generate_text_stream(text_client, model, file_content, prompt, system_prompt=None):
+    """
+    Generate text using streaming via NanoGPT.
+    Yields tokens as they are generated.
+    """
+    if not text_client:
+        raise Exception("Text client not initialized")
+    
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    
+    # Add the document content as context
+    context = f"Document content:\n{file_content}\n\n---\n\nUser question: {prompt}"
+    messages.append({"role": "user", "content": context})
+    
+    response = text_client.chat.completions.create(
+        model=model,
+        messages=messages,
+        stream=True
+    )
+    
+    for chunk in response:
+        if chunk.choices and chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
+
+
 def generate_voice_sample(tts_client, voice_id, text, speed=1.0):
     """
     Generates a voice sample using DeepInfra Kokoro.

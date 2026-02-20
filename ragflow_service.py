@@ -28,41 +28,82 @@ class RagflowClient:
             return [d for d in all_datasets if d.get('name') in self.allowed_datasets]
         return all_datasets
     
-    def list_documents(self, dataset_id, page=1, size=50):
+    def list_documents(self, dataset_id, page=1, size=100):
         result = self.request('GET', f'/datasets/{dataset_id}/documents?page={page}&size={size}')
         docs = result.get('data', {}).get('docs', [])
         
-        # Enrich with PubMed titles for PMC files
-        docs = self._enrich_with_pubmed_titles(docs)
+        # Enrich with title and pubdate from PubMed for PMC files
+        docs = self._enrich_documents(docs)
+        
+        # Sort by publication date (newest first)
+        docs = self._sort_by_date(docs)
         
         return docs, result.get('data', {}).get('total', 0)
     
-    def _enrich_with_pubmed_titles(self, docs):
-        """Fetch human-readable titles and publication dates from PubMed for PMC files"""
-        # Extract PMCs from file names like "PMC12527568.md" or "PMC12527568(1).md"
-        # Check both 'name' and 'location' fields
+    def _enrich_documents(self, docs):
+        """Extract title from filename and fetch pubdate from PubMed"""
         import re
-        pmcs = []
+        
+        # First pass: extract PMC IDs and prepare docs
+        pmc_to_doc = {}
         for doc in docs:
             name = doc.get('name', '') or doc.get('location', '')
-            # Match PMC followed by digits, optionally with (n) suffix, then .md
-            match = re.match(r'^PMC(\d+)(?:\(\d+\))?\.md$', name)
+            
+            # Extract title from filename (before " - PMCxxxxx")
+            # Format: "Title Here - PMC12345678.md"
+            match = re.match(r'^(.+?)\s*-\s*PMC(\d+)(?:\(\d+\))?\.md$', name)
             if match:
-                pmc_id = match.group(1)
-                pmcs.append((doc.get('id'), pmc_id))
+                extracted_title = match.group(1).strip()
+                pmc_id = match.group(2)
+                pmc_to_doc[pmc_id] = (doc, extracted_title)
+                doc['extracted_title'] = extracted_title
+                doc['pmc_id'] = pmc_id
+            else:
+                # No PMC ID - use filename as title
+                doc['extracted_title'] = name.replace('.md', '')
+                doc['pmc_id'] = None
+            
+            # Default to create_date if no pubdate
+            doc['pubdate'] = doc.get('create_date', '')[:10] if doc.get('create_date') else ''
         
-        if not pmcs:
+        if not pmc_to_doc:
             return docs
         
-        # Try to find PMID for each PMC using elink first, then search
+        # Look up PubMed for publication dates
+        pmc_ids = list(pmc_to_doc.keys())
+        pubdate_map = self._fetch_pubmed_dates(pmc_ids)
+        
+        # Update docs with PubMed info
+        for doc in docs:
+            pmc_id = doc.get('pmc_id')
+            if pmc_id and pmc_id in pubdate_map:
+                pub_info = pubdate_map[pmc_id]
+                if pub_info.get('pubdate'):
+                    doc['pubdate'] = pub_info['pubdate']
+                if pub_info.get('title'):
+                    doc['title'] = pub_info['title']
+            elif pmc_id:
+                # Use extracted title if no PubMed title
+                doc['title'] = doc.get('extracted_title', '')
+            else:
+                doc['title'] = doc.get('extracted_title', '')
+        
+        return docs
+    
+    def _fetch_pubmed_dates(self, pmc_ids):
+        """Fetch publication dates from PubMed for PMC IDs"""
+        if not pmc_ids:
+            return {}
+        
+        import requests
         pmc_to_pmid = {}
-        for doc_id, pmc_id in pmcs:
-            pmid = None
-            
-            # Method 1: Try elink (PMCID → PMID)
+        
+        # Step 1: Convert PMC to PMID
+        for pmc_id in pmc_ids:
             try:
+                # Try elink first
                 resp = requests.get(
-                    f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi",
+                    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi",
                     params={
                         'dbfrom': 'pmc',
                         'linkname': 'pmc_pubmed',
@@ -73,109 +114,79 @@ class RagflowClient:
                 )
                 data = resp.json()
                 links = data.get('linksets', [{}])[0].get('linksetdbs', [{}])
-                if links:
-                    pmids = links[0].get('links', [])
-                    if pmids:
-                        pmid = str(pmids[0])
+                if links and links[0].get('links'):
+                    pmc_to_pmid[pmc_id] = str(links[0]['links'][0])
             except:
                 pass
-            
-            # Method 2: Search PubMed by PMCID if elink failed
-            if not pmid:
-                try:
-                    # Try direct PMID first (some PMC IDs are same as PMIDs)
-                    resp = requests.get(
-                        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
-                        params={'db': 'pubmed', 'id': pmc_id, 'retmode': 'json'},
-                        timeout=10
-                    )
-                    data = resp.json()
-                    result = data.get('result', {}).get(pmc_id, {})
-                    if result.get('title'):
-                        pmid = pmc_id
-                except:
-                    pass
-            
-            # Method 3: Search PubMed by PMCID as term
-            if not pmid:
+        
+        if not pmc_to_pmid:
+            # Try search as fallback
+            for pmc_id in pmc_ids:
                 try:
                     resp = requests.get(
-                        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
-                        params={
-                            'db': 'pubmed',
-                            'term': f'{pmc_id}[pmcid]',
-                            'retmode': 'json',
-                            'retmax': 1
-                        },
+                        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+                        params={'db': 'pubmed', 'term': f'{pmc_id}[pmcid]', 'retmode': 'json', 'retmax': 1},
                         timeout=10
                     )
                     data = resp.json()
                     ids = data.get('esearchresult', {}).get('idlist', [])
                     if ids:
-                        pmid = ids[0]
+                        pmc_to_pmid[pmc_id] = ids[0]
                 except:
                     pass
-            
-            if pmid:
-                pmc_to_pmid[pmc_id] = pmid
         
         if not pmc_to_pmid:
-            # Can't find PMIDs - just use filename
-            for doc in docs:
-                doc['title'] = doc.get('name', '')
-                doc['pubdate'] = ''
-            return docs
+            return {}
         
-        # Now fetch titles using PMIDs
+        # Step 2: Get publication details
         pmid_list = list(pmc_to_pmid.values())
         try:
-            pmid_str = ','.join(pmid_list[:20])  # Limit batch size
+            pmid_str = ','.join(pmid_list[:30])  # Batch request
             resp = requests.get(
-                f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+                "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
                 params={'db': 'pubmed', 'id': pmid_str, 'retmode': 'json'},
-                timeout=10
+                timeout=15
             )
             data = resp.json()
             
-            # Map PMID to title and pubdate
-            info_map = {}
-            for pmid in pmid_list:
+            # Build result map
+            result = {}
+            for pmc_id, pmid in pmc_to_pmid.items():
                 try:
-                    result = data.get('result', {}).get(pmid, {})
-                    title = result.get('title', '')
-                    pubdate = result.get('pubdate', '')
-                    if title:
-                        # Truncate long titles
-                        if len(title) > 80:
-                            title = title[:77] + '...'
-                        info_map[pmid] = {'title': title, 'pubdate': pubdate}
+                    pubmed_data = data.get('result', {}).get(pmid, {})
+                    title = pubmed_data.get('title', '')
+                    pubdate = pubmed_data.get('pubdate', '')
+                    # PubDate format: "2024 Jan 15" - extract year
+                    if pubdate:
+                        year = pubdate.split()[0] if pubdate else ''
+                        pubdate = year
+                    result[pmc_id] = {'title': title, 'pubdate': pubdate}
+                except:
+                    result[pmc_id] = {'title': '', 'pubdate': ''}
+            
+            return result
+        except:
+            return {}
+    
+    def _sort_by_date(self, docs):
+        """Sort documents by publication date, newest first"""
+        def get_date(doc):
+            pubdate = doc.get('pubdate', '')
+            if pubdate and len(pubdate) >= 4:
+                try:
+                    return int(pubdate[:4])  # Year
                 except:
                     pass
-            
-            # Update docs with titles and dates (reverse lookup PMC -> PMID -> info)
-            for doc in docs:
-                name = doc.get('name', '') or doc.get('location', '')
-                match = re.match(r'^PMC(\d+)(?:\(\d+\))?\.md$', name)
-                if match:
-                    pmc_id = match.group(1)
-                    pmid = pmc_to_pmid.get(pmc_id)
-                    if pmid and pmid in info_map:
-                        doc['title'] = info_map[pmid]['title']
-                        doc['pubdate'] = info_map[pmid]['pubdate']
-                    else:
-                        doc['title'] = name
-                        doc['pubdate'] = ''
-                else:
-                    doc['title'] = doc.get('name', '')
-                    doc['pubdate'] = ''
-                    
-        except Exception as e:
-            # If lookup fails, just use filename
-            for doc in docs:
-                doc['title'] = doc.get('name', '')
-                doc['pubdate'] = ''
+            # Fallback to (when create_date uploaded to RagFlow)
+            create = doc.get('create_date', '')
+            if create and len(create) >= 4:
+                try:
+                    return int(create[:4])
+                except:
+                    pass
+            return 0
         
-        return docs
+        return sorted(docs, key=get_date, reverse=True)
     
     def get_document_chunks(self, dataset_id, document_id, page=1, size=100):
         """Get all chunks from a document for importing"""

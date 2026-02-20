@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#4f46e5"/>
+  <g fill="white">
+    <!-- Document shape -->
+    <path d="M140 80h180l60 60v292a20 20 0 0 1-20 20H140a20 20 0 0 1-20-20V100a20 20 0 0 1 20-20z" transform="translate(26 20) scale(0.85)"/>
+    <!-- Audio waves -->
+    <rect x="150" y="280" width="24" height="80" rx="12"/>
+    <rect x="200" y="240" width="24" height="160" rx="12"/>
+    <rect x="250" y="200" width="24" height="240" rx="12"/>
+    <rect x="300" y="240" width="24" height="160" rx="12"/>
+    <rect x="350" y="280" width="24" height="80" rx="12"/>
+    <!-- Lines representing text -->
+    <rect x="130" y="120" width="180" height="16" rx="4" opacity="0.6"/>
+    <rect x="130" y="160" width="160" height="16" rx="4" opacity="0.6"/>
+    <rect x="130" y="200" width="180" height="16" rx="4" opacity="0.6"/>
+  </g>
+</svg>

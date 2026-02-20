@@ -5,6 +5,31 @@ import re
 import uuid
 import threading
 import io
+import time
+from functools import lru_cache
+
+# Simple in-memory cache for RagFlow document lists
+class RagFlowCache:
+    def __init__(self, ttl_seconds=300):  # 5 min default TTL
+        self._cache = {}
+        self._ttl = ttl_seconds
+    
+    def get(self, key):
+        if key in self._cache:
+            data, timestamp = self._cache[key]
+            if time.time() - timestamp < self._ttl:
+                return data
+            del self._cache[key]
+        return None
+    
+    def set(self, key, data):
+        self._cache[key] = (data, time.time())
+    
+    def invalidate(self, key):
+        if key in self._cache:
+            del self._cache[key]
+
+ragflow_cache = RagFlowCache(ttl_seconds=300)
 
 def get_audio_filename(pdf_file):
     """Generate a safe audio filename from the PDF file's name"""
@@ -225,6 +250,54 @@ def summarize_file(file_id):
 
     return jsonify({'task_id': task_id}), 202
 
+
+@app.route('/summarize_stream/<int:file_id>')
+def summarize_stream(file_id):
+    """Streaming SSE endpoint for summary generation"""
+    from flask import Response, stream_with_context
+    from services import generate_text_stream, get_settings
+    
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    settings = get_settings()
+    
+    if not hasattr(app, 'text_client') or not app.text_client:
+        return Response(f"data: {json.dumps({'error': 'Text client not initialized'})}\n\n", 
+                       mimetype='text/event-stream')
+    
+    def generate():
+        try:
+            prompt = settings.summary_prompt
+            model_name = settings.summary_model
+            
+            # Send start event
+            yield f"data: {json.dumps({'type': 'start'})}\n\n"
+            
+            full_text = ""
+            for token in generate_text_stream(
+                app.text_client,
+                model_name,
+                pdf_file.text,
+                prompt,
+                "You are a helpful research assistant that summarizes documents clearly."
+            ):
+                full_text += token
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+            
+            # Save the summary
+            pdf_file.summary = full_text
+            db.session.commit()
+            
+            # Send complete event
+            yield f"data: {json.dumps({'type': 'complete', 'summary': full_text[:500]})}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+    
+    response = Response(stream_with_context(generate()), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
 def _get_task_status_response(task_id):
     """Helper function to get task status and clean up completed tasks."""
     task = Task.query.get_or_404(task_id)
@@ -409,6 +482,59 @@ def generate_transcript(file_id):
 @app.route('/transcript_status/<task_id>')
 def transcript_status(task_id):
     return _get_task_status_response(task_id)
+
+
+@app.route('/transcript_stream/<int:file_id>')
+def transcript_stream(file_id):
+    """Streaming SSE endpoint for transcript generation"""
+    from flask import Response, stream_with_context
+    from services import get_settings
+    
+    pdf_file = PDFFile.query.get_or_404(file_id)
+    settings = get_settings()
+    
+    # Check if summary exists first
+    if not pdf_file.summary:
+        return Response(f"data: {json.dumps({'type': 'error', 'error': 'No summary available. Generate summary first.'})}\n\n", 
+                       mimetype='text/event-stream')
+    
+    if not hasattr(app, 'text_client') or not app.text_client:
+        return Response(f"data: {json.dumps({'type': 'error', 'error': 'Text client not initialized'})}\n\n", 
+                       mimetype='text/event-stream')
+    
+    def generate():
+        try:
+            prompt = settings.transcript_prompt
+            model_name = settings.summary_model
+            
+            yield f"data: {json.dumps({'type': 'start'})}\n\n"
+            
+            full_text = ""
+            from services import generate_text_stream
+            for token in generate_text_stream(
+                app.text_client,
+                model_name,
+                pdf_file.summary,
+                prompt,
+                "You are a helpful research assistant that creates engaging podcast scripts from documents."
+            ):
+                full_text += token
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+            
+            pdf_file.transcript = full_text
+            db.session.commit()
+            
+            yield f"data: {json.dumps({'type': 'complete', 'transcript': full_text[:500]})}\n\n"
+            
+        except Exception as e:
+            import traceback
+            error_msg = str(e) + '\n' + traceback.format_exc()
+            yield f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n"
+    
+    response = Response(stream_with_context(generate()), mimetype='text/event-stream')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
 
 @app.route('/generate_podcast/<int:file_id>', methods=['POST'])
 def generate_podcast(file_id):
@@ -861,22 +987,55 @@ def ragflow_dataset(dataset_id):
     if not client:
         return jsonify({'error': 'Ragflow not configured'}), 400
     
+    # Get pagination params
+    page = request.args.get('page', 1, type=int)
+    size = request.args.get('size', 50, type=int)
+    
+    # Check cache for full document list
+    cache_key = f"docs_{dataset_id}_all"
+    force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+    
+    if force_refresh:
+        ragflow_cache.invalidate(cache_key)
+    
+    cached = ragflow_cache.get(cache_key)
+    
     try:
-        documents, total = client.list_documents(dataset_id, page=1, size=100)
-        # Get dataset name
-        datasets = client.list_datasets()
+        if cached is None:
+            # Fetch all documents (RagFlow API allows large page sizes)
+            documents, total = client.list_documents(dataset_id, page=1, size=1000)
+            cached = {'documents': documents, 'total': total}
+            ragflow_cache.set(cache_key, cached)
+        else:
+            documents = cached.get('documents', [])
+            total = cached.get('total', len(documents))
+        
+        # Get dataset name from cache or fetch
+        datasets_cache_key = "datasets_list"
+        datasets_cached = ragflow_cache.get(datasets_cache_key)
+        if datasets_cached:
+            datasets = datasets_cached
+        else:
+            datasets = client.list_datasets()
+            ragflow_cache.set(datasets_cache_key, datasets)
+        
         dataset_name = next((d.get('name', 'Unknown') for d in datasets if d.get('id') == dataset_id), 'Unknown')
+        
+        # Paginate from cached results
+        start_idx = (page - 1) * size
+        end_idx = start_idx + size
+        paginated_docs = documents[start_idx:end_idx]
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
     response = jsonify({
-        'documents': documents,
+        'documents': paginated_docs,
         'total': total,
-        'dataset_name': dataset_name
+        'dataset_name': dataset_name,
+        'page': page,
+        'size': size
     })
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
     return response
 
 
@@ -893,9 +1052,15 @@ def ragflow_import(dataset_id, document_id):
         # Get document content from Ragflow
         content = client.get_document_content(dataset_id, document_id)
         
-        # Get document info (list_documents enriches with PubMed titles)
-        documents, _ = client.list_documents(dataset_id, page=1, size=100)
-        doc_info = next((d for d in documents if d.get('id') == document_id), {})
+        # Try to get doc info from cache first
+        cache_key = f"docs_{dataset_id}"
+        cached = ragflow_cache.get(cache_key)
+        if cached and cached.get('documents'):
+            doc_info = next((d for d in cached['documents'] if d.get('id') == document_id), {})
+        else:
+            # Fallback: fetch single document info from RagFlow
+            documents, _ = client.list_documents(dataset_id, page=1, size=100)
+            doc_info = next((d for d in documents if d.get('id') == document_id), {})
         
         # Use title if available, otherwise fall back to filename
         doc_title = doc_info.get('title', '') or doc_info.get('name', 'Imported Document')
@@ -911,14 +1076,19 @@ def ragflow_import(dataset_id, document_id):
         db.session.add(new_file)
         db.session.commit()
         
-        # Auto-generate summary after import
-        task_id = str(uuid.uuid4())
-        new_task = Task(id=task_id, status='processing')
-        db.session.add(new_task)
-        db.session.commit()
+        # Auto-generate summary after import (only if content exists)
+        task_id = None
+        if content and len(content) > 100:
+            task_id = str(uuid.uuid4())
+            new_task = Task(id=task_id, status='processing')
+            db.session.add(new_task)
+            db.session.commit()
+            
+            thread = threading.Thread(target=_run_summary_generation, args=(app, task_id, new_file.id))
+            thread.start()
         
-        thread = threading.Thread(target=_run_summary_generation, args=(app, task_id, new_file.id))
-        thread.start()
+        # Invalidate cache after import so next open gets fresh data
+        ragflow_cache.invalidate(f"docs_{dataset_id}_all")
         
         return jsonify({
             'success': True,
