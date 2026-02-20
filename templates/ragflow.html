@@ -87,6 +87,10 @@
             document.getElementById('modal-title').textContent = datasetName;
             document.getElementById('documents-modal').style.display = 'flex';
             
+            // Show loading state
+            const list = document.getElementById('documents-list');
+            list.innerHTML = '<div class="text-center p-4"><div class="spinner"></div><p class="mt-2">Loading documents...</p></div>';
+            
             // Add cache-busting query param
             fetch(`/ragflow/dataset/${datasetId}?t=${Date.now()}`)
                 .then(r => r.json())

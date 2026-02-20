@@ -869,11 +869,15 @@ def ragflow_dataset(dataset_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-    return jsonify({
+    response = jsonify({
         'documents': documents,
         'total': total,
         'dataset_name': dataset_name
     })
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @app.route('/ragflow/import/<dataset_id>/<document_id>', methods=['POST'])
