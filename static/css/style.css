@@ -373,6 +373,8 @@ body {
     height: fit-content;
     position: sticky;
     top: 84px;
+    grid-column: 2;  /* Force to right column */
+    align-self: start;
 }
 
 .library-sidebar h4 {
@@ -713,6 +715,7 @@ body {
     }
 
     .library-sidebar {
+        display: none;  /* Hidden by default */
         position: fixed;
         bottom: 0;
         left: 0;
@@ -724,17 +727,14 @@ body {
         box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
         padding: 20px;
         background: var(--bg-secondary);
-        transition: transform 0.3s ease;
-        /* Start hidden on mobile */
-        transform: translateY(100%);
     }
 
     .library-sidebar.visible {
-        transform: translateY(0);
+        display: block;  /* Show when visible */
     }
 
     .library-sidebar.collapsed {
-        transform: translateY(100%);
+        display: none;  /* Hide when collapsed */
     }
 
     .library-toggle {
