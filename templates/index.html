@@ -184,7 +184,12 @@
                     <div class="workflow-step">
                         <div class="step-header">
                             <h3><span class="step-num">2</span> Summary</h3>
-                            <button class="btn btn-sm btn-ghost" onclick="showSummary()">View/Edit</button>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-ghost" onclick="showSummary()">View</button>
+                                <button class="btn btn-sm btn-ghost" onclick="regenerateSummary()" title="Regenerate">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="step-content">
                             <div class="summary-preview">
@@ -198,10 +203,14 @@
                         <div class="step-header">
                             <h3><span class="step-num">3</span> Podcast Script</h3>
                             {% if current_file.transcript %}
-                            <button class="btn btn-sm btn-ghost" onclick="showTranscript()">View/Edit</button>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-ghost" onclick="showTranscript()">Edit</button>
+                                <button class="btn btn-sm btn-ghost" onclick="regenerateTranscript()" title="Regenerate">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                            </div>
                             {% endif %}
                         </div>
-                        <div class="step-content">
                             {% if current_file.transcript %}
                             <div class="transcript-preview">
                                 {{ current_file.transcript[:300] }}...
@@ -231,7 +240,12 @@
                     <div class="workflow-step completed">
                         <div class="step-header">
                             <h3><span class="step-num">4</span> Audio Ready</h3>
-                            <button class="btn btn-sm btn-ghost" onclick="showTranscript()">Edit Script</button>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-ghost" onclick="showTranscript()">Edit Script</button>
+                                <button class="btn btn-sm btn-ghost" onclick="generatePodcast()" title="Regenerate">
+                                    <i class="bi bi-arrow-repeat"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="step-content">
                             <div class="audio-player">
@@ -441,6 +455,22 @@
 
         function generateTranscript() {
             showLoading('Creating podcast script...');
+            fetch('/generate_transcript/{{ current_file.id }}', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => pollTask(data.task_id, 'transcript'));
+        }
+
+        function regenerateSummary() {
+            if (!confirm('Regenerate summary?')) return;
+            showLoading('Regenerating summary...');
+            fetch('/summarize_file/{{ current_file.id }}', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => pollTask(data.task_id, 'summary'));
+        }
+
+        function regenerateTranscript() {
+            if (!confirm('Regenerate podcast script?')) return;
+            showLoading('Regenerating script...');
             fetch('/generate_transcript/{{ current_file.id }}', { method: 'POST' })
                 .then(r => r.json())
                 .then(data => pollTask(data.task_id, 'transcript'));
