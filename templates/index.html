@@ -150,7 +150,7 @@
                     {% if current_file %}
                     <div class="workflow-step" id="inline-progress" style="display: none;">
                         <div class="step-header">
-                            <h3><span class="step-num">2</span> <span id="progress-title-text">Generating Summary</span></h3>
+                            <h3><span class="step-num" id="progress-step-num">2</span> <span id="progress-title-text">Generating Summary</span></h3>
                         </div>
                         <div class="step-content">
                             <div class="inline-progress-container">
@@ -202,7 +202,7 @@
                         </div>
                         <div class="step-content">
                             <p class="text-muted">Summary not generated yet.</p>
-                            <button class="btn btn-primary btn-lg w-100" onclick="generateSummary()">
+                            <button class="btn btn-primary btn-lg w-100" id="btn-generate-summary" onclick="generateSummary()">
                                 <i class="bi bi-lightning"></i>
                                 Generate Summary
                             </button>
@@ -251,13 +251,13 @@
                                 <i class="bi bi-check-circle"></i> Audio ready!
                             </div>
                             {% else %}
-                            <button class="btn btn-primary btn-lg w-100 mt-3" onclick="generatePodcast()">
+                            <button class="btn btn-primary btn-lg w-100 mt-3" id="btn-generate-audio" onclick="generatePodcast()">
                                 <i class="bi bi-play-circle"></i>
                                 Generate Audio
                             </button>
                             {% endif %}
                             {% else %}
-                            <button class="btn btn-primary btn-lg w-100 mt-3" onclick="generateTranscript()">
+                            <button class="btn btn-primary btn-lg w-100 mt-3" id="btn-generate-transcript" onclick="generateTranscript()">
                                 <i class="bi bi-chat-dots"></i>
                                 Generate Podcast Script
                             </button>
@@ -511,6 +511,7 @@
 
         // Global flag for inline mode - must be defined first
         let globalInlineMode = new URL(window.location).searchParams.get('inline') === 'true';
+        let isGenerating = false;  // Flag to prevent multiple concurrent generation tasks
 
         // Task step map - defined early for use by pollTask
         const taskStepMap = {
@@ -520,11 +521,11 @@
         };
 
         // Poll for initial summary task if present (but check if already complete)
-        const initialTaskId = '{{ initial_task_id }}';
+        const initialTaskId = '{{ initial_task_id }}' !== 'None' ? '{{ initial_task_id }}' : null;
         const currentFileHasSummary = {{ 'true' if current_file and current_file.summary else 'false' }};
 
         // Use global flag
-        if (initialTaskId && initialTaskId !== 'None' && !currentFileHasSummary) {
+        if (initialTaskId && !currentFileHasSummary) {
             // Hide modal, use inline progress instead
             if (globalInlineMode) {
                 document.getElementById('progress-modal')?.classList.add('hidden');
@@ -540,8 +541,19 @@
 
         // Streaming support using SSE
         let currentEventSource = null;
-        
+
         function streamSummary() {
+            // Prevent multiple concurrent generation tasks
+            if (isGenerating) return;
+            isGenerating = true;
+
+            // Disable the button
+            const btn = document.getElementById('btn-generate-summary');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+            }
+
             globalInlineMode = true;
             showLoading('Generating summary...');
             
@@ -581,6 +593,8 @@
                 } else if (data.type === 'error') {
                     currentEventSource.close();
                     currentEventSource = null;
+                    isGenerating = false;
+                    resetGenerateButton('summary');
                     showInlineError('summary', data.error);
                 }
             };
@@ -591,8 +605,19 @@
                 showInlineError('summary', 'Connection error');
             };
         }
-        
+
         function streamTranscript() {
+            // Prevent multiple concurrent generation tasks
+            if (isGenerating) return;
+            isGenerating = true;
+
+            // Disable the button
+            const btn = document.getElementById('btn-generate-transcript');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+            }
+
             globalInlineMode = true;
             showLoading('Creating podcast script...', 'transcript');
             
@@ -630,15 +655,43 @@
                 } else if (data.type === 'error') {
                     currentEventSource.close();
                     currentEventSource = null;
+                    isGenerating = false;
+                    resetGenerateButton('transcript');
                     showInlineError('transcript', data.error);
                 }
             };
-            
+
             currentEventSource.onerror = function() {
                 currentEventSource.close();
                 currentEventSource = null;
+                isGenerating = false;
+                resetGenerateButton('transcript');
                 showInlineError('transcript', 'Connection error');
             };
+        }
+
+        // Helper to reset generate button after error
+        function resetGenerateButton(type) {
+            let btnId = null;
+            if (type === 'summary') btnId = 'btn-generate-summary';
+            else if (type === 'transcript') btnId = 'btn-generate-transcript';
+            else if (type === 'podcast') btnId = 'btn-generate-audio';
+
+            if (btnId) {
+                const btn = document.getElementById(btnId);
+                if (btn) {
+                    btn.disabled = false;
+                    // Reset button text based on type
+                    if (type === 'summary') {
+                        btn.innerHTML = '<i class="bi bi-lightning"></i> Generate Summary';
+                    } else if (type === 'transcript') {
+                        btn.innerHTML = '<i class="bi bi-chat-dots"></i> Generate Podcast Script';
+                    } else if (type === 'podcast') {
+                        btn.innerHTML = '<i class="bi bi-play-circle"></i> Generate Audio';
+                    }
+                }
+            }
+            isGenerating = false;
         }
 
         // Legacy workflow functions (keep for podcast which doesn't have streaming yet)
@@ -647,13 +700,24 @@
         }
 
         function generatePodcast() {
+            // Prevent multiple concurrent generation tasks
+            if (isGenerating) return;
+            isGenerating = true;
+
+            // Disable the button
+            const btn = document.getElementById('btn-generate-audio');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+            }
+
             globalInlineMode = true;
             showLoading('Generating podcast audio...', 'podcast');
-            
+
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 30000);
-            
-            fetch('/generate_podcast/{{ current_file.id }}', { 
+
+            fetch('/generate_podcast/{{ current_file.id }}', {
                 method: 'POST',
                 signal: controller.signal
             })
@@ -666,6 +730,8 @@
             .catch(err => {
                 clearTimeout(timeoutId);
                 console.error('Generate podcast error:', err);
+                isGenerating = false;
+                resetGenerateButton('podcast');
                 alert('Error: ' + err.message);
             });
         }
@@ -867,16 +933,22 @@
             const useInline = globalInlineMode && hasInlineElements;
 
             if (useInline) {
-                // Only hide workflow steps for summary generation, not for transcript
+                // Only hide workflow steps for summary generation, not for transcript/podcast
                 if (type === 'summary') {
                     const workflowSteps = document.getElementById('workflow-steps-container');
                     if (workflowSteps) workflowSteps.style.display = 'none';
                 }
 
+                // Update step number and labels based on task type
+                const stepNumEl = document.getElementById('progress-step-num');
                 const titleEl = document.getElementById('progress-title-text');
                 const statusEl = document.getElementById('progress-status-text');
                 const barEl = document.getElementById('inline-progress-bar');
 
+                // Get task info from taskStepMap
+                const taskInfo = taskStepMap[type] || { step: 2, name: type };
+
+                if (stepNumEl) stepNumEl.textContent = taskInfo.step;
                 if (titleEl) titleEl.textContent = text;
                 if (statusEl) statusEl.textContent = 'Please wait...';
                 if (barEl) {
@@ -933,6 +1005,21 @@
             // Show progress - inline or modal based on mode
             if (inline) {
                 // Inline mode - update the inline progress in workflow area
+                // Hide workflow steps for summary generation
+                if (type === 'summary') {
+                    const workflowSteps = document.getElementById('workflow-steps-container');
+                    if (workflowSteps) workflowSteps.style.display = 'none';
+                }
+
+                // Show inline-progress div
+                const inlineDiv = document.getElementById('inline-progress');
+                if (inlineDiv) inlineDiv.style.display = 'block';
+
+                // Update step number based on task type
+                const stepNumEl = document.getElementById('progress-step-num');
+                const taskInfo = taskStepMap[type] || { step: 2, name: type };
+                if (stepNumEl) stepNumEl.textContent = taskInfo.step;
+
                 const titleEl = document.getElementById('progress-title-text');
                 const statusEl = document.getElementById('progress-status-text');
                 const barEl = document.getElementById('inline-progress-bar');
