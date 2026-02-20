@@ -154,9 +154,10 @@ class RagflowClient:
             
             # Update docs with titles and dates (reverse lookup PMC -> PMID -> info)
             for doc in docs:
-                name = doc.get('name', '')
-                if name.startswith('PMC') and name.endswith('.md'):
-                    pmc_id = name[3:-3]
+                name = doc.get('name', '') or doc.get('location', '')
+                match = re.match(r'^PMC(\d+)(?:\(\d+\))?\.md$', name)
+                if match:
+                    pmc_id = match.group(1)
                     pmid = pmc_to_pmid.get(pmc_id)
                     if pmid and pmid in info_map:
                         doc['title'] = info_map[pmid]['title']
