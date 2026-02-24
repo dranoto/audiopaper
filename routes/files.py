@@ -152,6 +152,12 @@ def create_files_bp(app):
             "audio_url": audio_url,
         }
 
+    @bp.route("/file_text/<int:file_id>")
+    def file_text(file_id):
+        pdf_file = PDFFile.query.get_or_404(file_id)
+        text = pdf_file.text
+        return {"text": text}
+
     @bp.route("/file_details/<int:file_id>")
     def file_details(file_id):
         pdf_file = PDFFile.query.get_or_404(file_id)

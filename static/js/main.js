@@ -18,6 +18,28 @@ window.showSummary = function() {
 };
 
 window.showOriginalText = function() {
+    const contentEl = document.getElementById('original-text-content');
+    contentEl.textContent = 'Loading...';
+    
+    const fileId = window.CURRENT_FILE_ID;
+    if (!fileId) {
+        contentEl.textContent = 'No file selected';
+        return;
+    }
+    
+    fetch(`/file_text/${fileId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.text) {
+                contentEl.textContent = data.text;
+            } else {
+                contentEl.innerHTML = '<p class="text-muted">Original text is not available for this file.</p>';
+            }
+        })
+        .catch(err => {
+            contentEl.textContent = 'Error loading text: ' + err.message;
+        });
+    
     window.showModal('original-text-modal');
 };
 
