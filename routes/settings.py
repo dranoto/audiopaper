@@ -1,6 +1,6 @@
 from flask import Blueprint, request, redirect, url_for, render_template
 
-from database import get_settings
+from database import db, get_settings
 from services import (
     SUMMARY_MODEL,
     TRANSCRIPT_MODEL,
@@ -40,8 +40,6 @@ def create_settings_bp(app):
             s.summary_prompt = request.form.get("summary_prompt")
             s.transcript_prompt = request.form.get("transcript_prompt")
             s.transcript_length = request.form.get("transcript_length", "medium")
-            from database import db
-
             db.session.commit()
             init_tts_client(app)
             init_text_client(app)

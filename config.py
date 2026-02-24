@@ -16,6 +16,10 @@ class Config:
         "DATABASE_URL", "sqlite:///db.sqlite3"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
+    SQLALCHEMY_ENGINE_OPTIONS: dict = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
 
     # Folders
     UPLOAD_FOLDER: str = os.environ.get("UPLOAD_FOLDER", "uploads")

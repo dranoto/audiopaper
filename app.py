@@ -1,4 +1,5 @@
 import os
+import threading
 
 from flask import Flask
 from database import init_db
@@ -11,13 +12,13 @@ app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = config.UPLOAD_FOLDER
 app.config["GENERATED_AUDIO_FOLDER"] = config.GENERATED_AUDIO_FOLDER
 app.config["SQLALCHEMY_DATABASE_URI"] = config.SQLALCHEMY_DATABASE_URI
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = config.SQLALCHEMY_ENGINE_OPTIONS
 app.config["SERVER_NAME"] = config.SERVER_NAME
 app.config["PREFERRED_URL_SCHEME"] = config.PREFERRED_URL_SCHEME
 app.config["APPLICATION_ROOT"] = config.APPLICATION_ROOT
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = config.SQLALCHEMY_TRACK_MODIFICATIONS
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_CONTENT_LENGTH
 
-# Validate config and create folders
 issues = config.validate()
 if issues:
     for issue in issues:
@@ -40,11 +41,14 @@ task_queue.register_handler("summary", _run_summary_generation)
 task_queue.register_handler("transcript", _run_transcript_generation)
 task_queue.register_handler("podcast", _run_podcast_generation)
 
+_worker_start_lock = threading.Lock()
+
 
 @app.before_request
 def start_workers_if_needed():
-    if not task_queue._running:
-        task_queue.start_workers(app)
+    with _worker_start_lock:
+        if not task_queue._running:
+            task_queue.start_workers(app)
 
 
 import atexit

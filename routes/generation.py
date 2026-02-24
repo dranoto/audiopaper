@@ -19,6 +19,7 @@ from tasks.workers import (
     _run_transcript_generation,
     _run_podcast_generation,
 )
+from utils.task_queue import TaskStatus
 
 
 def create_generation_bp(app):
@@ -30,7 +31,7 @@ def create_generation_bp(app):
             "status": task.status,
             "result": json.loads(task.result) if task.result else None,
         }
-        if task.status in ["complete", "error"]:
+        if task.status in [TaskStatus.COMPLETE.value, TaskStatus.ERROR.value]:
             db.session.delete(task)
             db.session.commit()
         return jsonify(response_data)
@@ -38,7 +39,7 @@ def create_generation_bp(app):
     @bp.route("/summarize_file/<int:file_id>", methods=["POST"])
     def summarize_file(file_id):
         task_id = str(uuid.uuid4())
-        new_task = Task(id=task_id, status="processing")
+        new_task = Task(id=task_id, status=TaskStatus.PROCESSING)
         db.session.add(new_task)
         db.session.commit()
 
@@ -77,6 +78,9 @@ def create_generation_bp(app):
                 yield f"data: {json.dumps({'type': 'start'})}\n\n"
 
                 full_text = ""
+                token_buffer = ""
+                buffer_size = 50
+
                 for token in generate_text_stream(
                     app.text_client,
                     model_name,
@@ -85,7 +89,13 @@ def create_generation_bp(app):
                     "You are a helpful research assistant that summarizes documents clearly.",
                 ):
                     full_text += token
-                    yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                    token_buffer += token
+                    if len(token_buffer) >= buffer_size:
+                        yield f"data: {json.dumps({'type': 'token', 'content': token_buffer})}\n\n"
+                        token_buffer = ""
+
+                if token_buffer:
+                    yield f"data: {json.dumps({'type': 'token', 'content': token_buffer})}\n\n"
 
                 pdf_file.summary = full_text
                 db.session.commit()
@@ -108,7 +118,7 @@ def create_generation_bp(app):
     @bp.route("/generate_transcript/<int:file_id>", methods=["POST"])
     def generate_transcript(file_id):
         task_id = str(uuid.uuid4())
-        new_task = Task(id=task_id, status="processing")
+        new_task = Task(id=task_id, status=TaskStatus.PROCESSING)
         db.session.add(new_task)
         db.session.commit()
 
@@ -125,10 +135,10 @@ def create_generation_bp(app):
 
     @bp.route("/transcript_stream/<int:file_id>")
     def transcript_stream(file_id):
-        PDFFile.query.get_or_404(file_id)
+        pdf_file = PDFFile.query.get_or_404(file_id)
         settings = get_settings()
 
-        if not PDFFile.query.get(file_id).summary:
+        if not pdf_file.summary:
             return Response(
                 f"data: {json.dumps({'type': 'error', 'error': 'No summary available. Generate summary first.'})}\n\n",
                 mimetype="text/event-stream",
@@ -141,15 +151,6 @@ def create_generation_bp(app):
             )
 
         def generate():
-            pdf_file = PDFFile.query.get(file_id)
-            if not pdf_file:
-                yield f"data: {json.dumps({'type': 'error', 'error': 'File not found'})}\n\n"
-                return
-
-            if not pdf_file.summary:
-                yield f"data: {json.dumps({'type': 'error', 'error': 'No summary available. Generate summary first.'})}\n\n"
-                return
-
             try:
                 prompt = settings.transcript_prompt
                 model_name = settings.transcript_model
@@ -157,6 +158,9 @@ def create_generation_bp(app):
                 yield f"data: {json.dumps({'type': 'start'})}\n\n"
 
                 full_text = ""
+                token_buffer = ""
+                buffer_size = 50
+
                 for token in generate_text_stream(
                     app.text_client,
                     model_name,
@@ -165,7 +169,13 @@ def create_generation_bp(app):
                     "You are a helpful research assistant that creates engaging podcast scripts from documents.",
                 ):
                     full_text += token
-                    yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                    token_buffer += token
+                    if len(token_buffer) >= buffer_size:
+                        yield f"data: {json.dumps({'type': 'token', 'content': token_buffer})}\n\n"
+                        token_buffer = ""
+
+                if token_buffer:
+                    yield f"data: {json.dumps({'type': 'token', 'content': token_buffer})}\n\n"
 
                 pdf_file.transcript = full_text
                 db.session.commit()
@@ -188,7 +198,7 @@ def create_generation_bp(app):
     @bp.route("/generate_podcast/<int:file_id>", methods=["POST"])
     def generate_podcast(file_id):
         task_id = str(uuid.uuid4())
-        new_task = Task(id=task_id, status="processing")
+        new_task = Task(id=task_id, status=TaskStatus.PROCESSING)
         db.session.add(new_task)
         db.session.commit()
         thread = threading.Thread(
