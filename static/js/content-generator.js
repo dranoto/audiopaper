@@ -132,6 +132,11 @@ function handlePollingError(fileId, type, err) {
 }
 
 function summarizeFile(fileId) {
+    fileId = fileId || window.CURRENT_FILE_ID;
+    if (!fileId) {
+        alert('No file selected');
+        return;
+    }
     showLoading(document.getElementById('summary-content'), 'Generating summary... This may take a moment.');
     const summaryTab = document.getElementById('summary-tab');
     if (summaryTab) {
@@ -153,11 +158,19 @@ function summarizeFile(fileId) {
             pollTaskStatus(taskUrl, fileId, 'Summary');
         })
         .catch(err => {
-            document.getElementById('summary-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+            const summaryContent = document.getElementById('summary-content');
+            if (summaryContent) {
+                summaryContent.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+            }
         });
 }
 
 function generateTranscript(fileId) {
+    fileId = fileId || window.CURRENT_FILE_ID;
+    if (!fileId) {
+        alert('No file selected');
+        return;
+    }
     showLoading(document.getElementById('transcript-content'), 'Generating transcript... This may take a moment.');
     const transcriptTab = document.getElementById('transcript-tab');
     if (transcriptTab) {
@@ -179,12 +192,24 @@ function generateTranscript(fileId) {
             pollTaskStatus(taskUrl, fileId, 'Transcript');
         })
         .catch(err => {
-            document.getElementById('transcript-content').innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+            const transcriptContent = document.getElementById('transcript-content');
+            if (transcriptContent) {
+                transcriptContent.innerHTML = `<p class="text-danger">Error: ${err.message}</p>`;
+            }
         });
 }
 
 function generatePodcast(fileId) {
+    fileId = fileId || window.CURRENT_FILE_ID;
+    if (!fileId) {
+        alert('No file selected');
+        return;
+    }
     const button = document.querySelector(`#file-item-${fileId} [data-action="generatePodcast"]`);
+    if (!button) {
+        alert('Button not found');
+        return;
+    }
     button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...`;
     button.disabled = true;
     requestNotificationPermission();
