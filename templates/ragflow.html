@@ -62,9 +62,85 @@
         </div>
     </div>
 </div>
+
+<div class="batch-import-bar" id="batch-import-bar">
+    <span><span id="selected-count">0</span> selected</span>
+    <button class="btn btn-sm btn-outline" onclick="deselectAll()">Clear</button>
+    <button class="btn btn-sm btn-primary" id="btn-batch-import" onclick="importBatch()" disabled>
+        <i class="bi bi-download"></i> Import Selected
+    </button>
+</div>
+
+<div class="modal-overlay" id="batch-progress-modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="bi bi-list-task"></i> Batch Import Progress</h3>
+            <button class="btn btn-ghost" onclick="closeModal('batch-progress-modal')">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="batch-progress-list"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="viewInLibrary()">
+                <i class="bi bi-collection"></i> View in Library
+            </button>
+            <button class="btn btn-primary" onclick="closeModal('batch-progress-modal')">
+                Close
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<style>
+.batch-import-bar {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 1000;
+    align-items: center;
+    gap: 15px;
+}
+.batch-import-bar.visible {
+    display: flex;
+}
+.batch-progress-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+.batch-progress-item .spinner {
+    width: 14px;
+    height: 14px;
+    border-width: 2px;
+}
+.document-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.document-item:hover {
+    background: var(--hover-bg);
+}
+.document-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+</style>
 <script>
 const importedNames = new Set({{ imported_names | tojson }});
 
@@ -105,11 +181,20 @@ function loadDocuments(datasetId, page, refresh = false) {
                 return;
             }
             
-            const docsHtml = data.documents.map(doc => {
+            const docsHtml = `
+                <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                    <label style="cursor: pointer;">
+                        <input type="checkbox" id="select-all" onchange="this.checked ? selectAll() : deselectAll()">
+                        <span class="ms-2">Select all (${totalDocs})</span>
+                    </label>
+                </div>
+            ` + data.documents.map(doc => {
                 const docName = doc.name || doc.title || 'Untitled';
                 const isImported = importedNames.has(docName);
                 return `
                 <div class="document-item">
+                    <input type="checkbox" class="doc-checkbox" data-id="${doc.id}" 
+                        onchange="toggleDocSelection('${doc.id}')" ${isImported ? 'disabled' : ''}>
                     <div class="document-icon">
                         <i class="bi bi-file-earmark-text"></i>
                     </div>
@@ -194,6 +279,176 @@ function importDoc(datasetId, docId, docName) {
 
 function closeModal(id) {
     document.getElementById(id).style.display = 'none';
+}
+
+let selectedDocs = new Set();
+
+function toggleDocSelection(docId) {
+    if (selectedDocs.has(docId)) {
+        selectedDocs.delete(docId);
+    } else {
+        selectedDocs.add(docId);
+    }
+    updateBatchBar();
+}
+
+function updateBatchBar() {
+    const bar = document.getElementById('batch-import-bar');
+    const countEl = document.getElementById('selected-count');
+    const importBtn = document.getElementById('btn-batch-import');
+    
+    countEl.textContent = selectedDocs.size;
+    
+    if (selectedDocs.size > 0) {
+        bar.classList.add('visible');
+        importBtn.disabled = false;
+    } else {
+        bar.classList.remove('visible');
+    }
+}
+
+function selectAll() {
+    const checkboxes = document.querySelectorAll('.doc-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = true;
+        selectedDocs.add(cb.dataset.id);
+    });
+    updateBatchBar();
+}
+
+function deselectAll() {
+    const checkboxes = document.querySelectorAll('.doc-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+    });
+    selectedDocs.clear();
+    updateBatchBar();
+}
+
+function importBatch() {
+    if (selectedDocs.size === 0) return;
+    
+    const docIds = Array.from(selectedDocs);
+    const btn = document.getElementById('btn-batch-import');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Importing...';
+    
+    fetch(`/ragflow/import_batch/${currentDatasetId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            document_ids: docIds,
+            auto_generate: true
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            alert('Error: ' + data.error);
+            btn.disabled = false;
+            btn.innerHTML = 'Import Selected';
+            return;
+        }
+        
+        showBatchProgress(data.batch_id, data.imported);
+    })
+    .catch(err => {
+        alert('Error: ' + err);
+        btn.disabled = false;
+        btn.innerHTML = 'Import Selected';
+    });
+}
+
+function showBatchProgress(batchId, importedFiles) {
+    const modal = document.getElementById('batch-progress-modal');
+    const list = document.getElementById('batch-progress-list');
+    
+    modal.style.display = 'flex';
+    
+    let html = importedFiles.map(f => `
+        <div class="batch-progress-item" id="batch-item-${f.file_id}">
+            <div class="spinner"></div>
+            <span>${f.filename}</span>
+            <span class="badge bg-secondary">Importing...</span>
+        </div>
+    `).join('');
+    
+    list.innerHTML = html;
+    
+    pollBatchStatus(batchId);
+}
+
+function pollBatchStatus(batchId) {
+    fetch(`/ragflow/batch/${batchId}`)
+        .then(r => r.json())
+        .then(data => {
+            updateBatchProgressUI(data);
+            
+            if (data.pending > 0 || data.processing > 0) {
+                setTimeout(() => pollBatchStatus(batchId), 2000);
+            }
+        });
+}
+
+function updateBatchProgressUI(batch) {
+    batch.tasks.forEach(task => {
+        const item = document.getElementById(`batch-item-${task.file_id}`);
+        if (!item) return;
+        
+        const status = task.status;
+        let badgeClass = 'bg-secondary';
+        let icon = '<div class="spinner"></div>';
+        let statusText = 'Processing...';
+        
+        if (status === 'completed') {
+            badgeClass = 'bg-success';
+            icon = '<i class="bi bi-check-circle text-success"></i>';
+            statusText = 'Done';
+        } else if (status === 'error') {
+            badgeClass = 'bg-danger';
+            icon = '<i class="bi bi-exclamation-circle text-danger"></i>';
+            statusText = 'Failed';
+            
+            const retryBtn = `<button class="btn btn-sm btn-outline ms-2" onclick="retryBatchTask('${task.id}', ${task.file_id})">
+                <i class="bi bi-arrow-repeat"></i> Retry
+            </button>`;
+            item.querySelector('.badge').outerHTML = `<span class="badge ${badgeClass}">${statusText}</span>${retryBtn}`;
+        } else if (status === 'processing') {
+            badgeClass = 'bg-primary';
+            statusText = 'Processing...';
+        } else if (status === 'pending') {
+            badgeClass = 'bg-warning';
+            statusText = 'Queued';
+        }
+        
+        if (status !== 'error') {
+            item.querySelector('.spinner').outerHTML = icon;
+            item.querySelector('.badge').className = `badge ${badgeClass}`;
+            item.querySelector('.badge').textContent = statusText;
+        }
+    });
+}
+
+function retryBatchTask(taskId, fileId) {
+    fetch(`/ragflow/task/${taskId}/retry`, {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const item = document.getElementById(`batch-item-${fileId}`);
+                item.querySelector('.badge').className = 'badge bg-warning';
+                item.querySelector('.badge').textContent = 'Queued';
+                item.querySelector('button')?.remove();
+                
+                const batchId = new URLSearchParams(window.location.search).get('batch_id');
+                if (batchId) pollBatchStatus(batchId);
+            }
+        });
+}
+
+function viewInLibrary() {
+    const url = new URL(window.location.origin + '/');
+    url.searchParams.set('show_tasks', 'true');
+    window.location.href = url.toString();
 }
 </script>
 {% endblock %}
