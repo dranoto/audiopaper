@@ -65,12 +65,20 @@ def extract_tags_from_summary(summary_text):
 
 def _get_document_content(pdf_file, settings):
     """Get document content - from local storage or fetch from Ragflow."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     # First try local text
     if pdf_file.text:
+        logger.info(
+            f"Using local text for file {pdf_file.id}, length: {len(pdf_file.text)}"
+        )
         return pdf_file.text
 
     # Try fetching from Ragflow if backed by Ragflow
     if pdf_file.is_ragflow_backed:
+        logger.info(f"File {pdf_file.id} is Ragflow-backed, fetching content...")
         client = get_ragflow_client(settings)
         if client:
             try:
@@ -78,10 +86,15 @@ def _get_document_content(pdf_file, settings):
                     pdf_file.ragflow_dataset_id, pdf_file.ragflow_document_id
                 )
                 if content:
+                    logger.info(f"Fetched from Ragflow, content length: {len(content)}")
                     return content
             except Exception as e:
+                logger.error(f"Error fetching from Ragflow: {e}")
                 raise Exception(f"Failed to fetch document from Ragflow: {e}")
 
+    logger.warning(
+        f"No content found for file {pdf_file.id} - text: {bool(pdf_file.text)}, is_ragflow_backed: {pdf_file.is_ragflow_backed}"
+    )
     raise Exception(
         "No document content available. Please re-import or upload the PDF."
     )
@@ -105,6 +118,24 @@ def _run_summary_generation(app, task_id, file_id):
 
             # Get content (from local or Ragflow)
             document_content = _get_document_content(pdf_file, settings)
+
+            if not document_content:
+                raise Exception(
+                    "No document content available - _get_document_content returned empty"
+                )
+
+            app.logger.info(
+                f"Task {task_id}: Document content length: {len(document_content)} chars"
+            )
+            app.logger.info(
+                f"Task {task_id}: is_ragflow_backed: {pdf_file.is_ragflow_backed}"
+            )
+            app.logger.info(
+                f"Task {task_id}: ragflow_dataset_id: {pdf_file.ragflow_dataset_id}"
+            )
+            app.logger.info(
+                f"Task {task_id}: ragflow_document_id: {pdf_file.ragflow_document_id}"
+            )
 
             prompt = settings.summary_prompt
             model_name = settings.summary_model
