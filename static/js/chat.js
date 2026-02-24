@@ -2,6 +2,42 @@
 
 let chatHistory = [];
 
+function appendChatMessage(message, sender) {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+
+    const initialMessage = chatMessages.querySelector('.text-muted');
+    if (initialMessage) {
+        initialMessage.remove();
+    }
+
+    const converter = new showdown.Converter();
+
+    const messageWrapper = document.createElement('div');
+    messageWrapper.classList.add('chat-message', `${sender}-message`, 'mb-3', 'd-flex');
+
+    const icon = document.createElement('div');
+    icon.classList.add('me-2');
+    icon.innerHTML = sender === 'user' ? '<i class="bi bi-person-circle"></i>' : '<i class="bi bi-robot"></i>';
+
+    const content = document.createElement('div');
+    content.classList.add('message-content');
+
+    if (sender === 'assistant') {
+        content.innerHTML = converter.makeHtml(message);
+    } else {
+        content.textContent = message;
+        content.style.whiteSpace = 'pre-wrap';
+    }
+
+    messageWrapper.appendChild(icon);
+    messageWrapper.appendChild(content);
+
+    chatMessages.appendChild(messageWrapper);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return content;
+}
+
 function handleChatSubmit(event) {
     event.preventDefault();
     const chatInput = document.getElementById('chat-input');
