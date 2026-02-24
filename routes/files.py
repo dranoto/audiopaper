@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from database import db, PDFFile, Folder, Task, get_settings
 from services import process_pdf, allowed_file, init_tts_client, init_text_client
 from ragflow_service import get_ragflow_client
-from tasks.workers import _run_summary_generation
+from tasks.workers import _run_summary_generation, _get_document_content
 
 
 def get_all_tags():
@@ -155,7 +155,7 @@ def create_files_bp(app):
     @bp.route("/file_text/<int:file_id>")
     def file_text(file_id):
         pdf_file = PDFFile.query.get_or_404(file_id)
-        text = pdf_file.text
+        text = _get_document_content(pdf_file, get_settings())
         return {"text": text}
 
     @bp.route("/file_details/<int:file_id>")

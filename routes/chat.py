@@ -4,6 +4,7 @@ from flask import Blueprint, request, jsonify
 
 from database import db, PDFFile, get_settings
 from ragflow_service import get_ragflow_client
+from tasks.workers import _get_document_content
 
 MAX_CHAT_HISTORY = 20
 
@@ -71,7 +72,8 @@ def create_chat_bp(app):
         try:
             messages = [{"role": "system", "content": system_prompt}]
 
-            context_parts = [f"Document content:\n{pdf_file.text}"]
+            document_content = _get_document_content(pdf_file, get_settings())
+            context_parts = [f"Document content:\n{document_content}"]
             if ragflow_context:
                 context_parts.append(ragflow_context)
 
