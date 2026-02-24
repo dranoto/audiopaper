@@ -130,8 +130,7 @@ def create_ragflow_bp(app):
             return jsonify({"error": "Ragflow not configured"}), 400
 
         try:
-            content = client.get_document_content(dataset_id, document_id)
-
+            # Get document info from cache or API
             cache_key = f"docs_{dataset_id}_all"
             cached = ragflow_cache.get(cache_key)
             if cached and cached.get("documents"):
@@ -153,23 +152,40 @@ def create_ragflow_bp(app):
                 else doc_info.get("name", "Imported Document")
             )
 
+            # Check if already imported
+            existing = PDFFile.query.filter_by(ragflow_document_id=document_id).first()
+            if existing:
+                return jsonify(
+                    {
+                        "success": True,
+                        "file_id": existing.id,
+                        "filename": existing.filename,
+                        "message": "Document already imported",
+                    }
+                ), 200
+
+            # Create new file with Ragflow references ONLY (no local content)
             new_file = PDFFile(
-                filename=doc_name, text=content, figures="[]", captions="[]"
+                filename=doc_name,
+                text=None,  # Don't store locally - fetch on demand
+                figures="[]",
+                captions="[]",
+                ragflow_document_id=document_id,
+                ragflow_dataset_id=dataset_id,
             )
             db.session.add(new_file)
             db.session.commit()
 
-            task_id = None
-            if content and len(content) > 100:
-                task_id = str(uuid.uuid4())
-                new_task = Task(id=task_id, status="processing")
-                db.session.add(new_task)
-                db.session.commit()
+            # Queue summary generation (fetched from Ragflow when needed)
+            task_id = str(uuid.uuid4())
+            new_task = Task(id=task_id, status="processing")
+            db.session.add(new_task)
+            db.session.commit()
 
-                thread = threading.Thread(
-                    target=_run_summary_generation, args=(app, task_id, new_file.id)
-                )
-                thread.start()
+            thread = threading.Thread(
+                target=_run_summary_generation, args=(app, task_id, new_file.id)
+            )
+            thread.start()
 
             ragflow_cache.invalidate(f"docs_{dataset_id}_all")
 

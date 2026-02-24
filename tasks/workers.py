@@ -3,7 +3,32 @@ import os
 from flask import url_for
 from database import db, PDFFile, Task, get_settings
 from services import generate_text_with_file, generate_podcast_audio
+from ragflow_service import get_ragflow_client
 from utils.audio import get_audio_filename
+
+
+def _get_document_content(pdf_file, settings):
+    """Get document content - from local storage or fetch from Ragflow."""
+    # First try local text
+    if pdf_file.text:
+        return pdf_file.text
+
+    # Try fetching from Ragflow if backed by Ragflow
+    if pdf_file.is_ragflow_backed:
+        client = get_ragflow_client(settings)
+        if client:
+            try:
+                content = client.get_document_content(
+                    pdf_file.ragflow_dataset_id, pdf_file.ragflow_document_id
+                )
+                if content:
+                    return content
+            except Exception as e:
+                raise Exception(f"Failed to fetch document from Ragflow: {e}")
+
+    raise Exception(
+        "No document content available. Please re-import or upload the PDF."
+    )
 
 
 def _run_summary_generation(app, task_id, file_id):
@@ -22,6 +47,9 @@ def _run_summary_generation(app, task_id, file_id):
                     "NanoGPT text client not initialized. Please set API key in settings."
                 )
 
+            # Get content (from local or Ragflow)
+            document_content = _get_document_content(pdf_file, settings)
+
             prompt = settings.summary_prompt
             model_name = settings.summary_model
 
@@ -30,7 +58,7 @@ def _run_summary_generation(app, task_id, file_id):
             response_text = generate_text_with_file(
                 app.text_client,
                 model_name,
-                pdf_file.text,
+                document_content,
                 prompt,
                 "You are a helpful research assistant that summarizes documents clearly.",
             )
@@ -69,6 +97,9 @@ def _run_transcript_generation(app, task_id, file_id):
                     "NanoGPT text client not initialized. Please set API key in settings."
                 )
 
+            # Get content (from local or Ragflow)
+            document_content = _get_document_content(pdf_file, settings)
+
             transcript_model_name = settings.transcript_model
 
             length_guidance = {
@@ -89,7 +120,7 @@ def _run_transcript_generation(app, task_id, file_id):
             transcript_text = generate_text_with_file(
                 app.text_client,
                 transcript_model_name,
-                pdf_file.text,
+                document_content,
                 full_prompt,
                 "You are a helpful research assistant that creates engaging podcast scripts from documents.",
             )
@@ -134,6 +165,9 @@ def _run_podcast_generation(app, task_id, file_id):
                         "NanoGPT text client not initialized. Please set API key in settings."
                     )
 
+                # Get content from Ragflow or local
+                document_content = _get_document_content(pdf_file, settings)
+
                 transcript_model_name = settings.transcript_model
 
                 length_guidance = {
@@ -150,7 +184,7 @@ def _run_podcast_generation(app, task_id, file_id):
                 transcript_text = generate_text_with_file(
                     app.text_client,
                     transcript_model_name,
-                    pdf_file.text,
+                    document_content,
                     full_prompt,
                     "You are a helpful research assistant that creates engaging podcast scripts from documents.",
                 )

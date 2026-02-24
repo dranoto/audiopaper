@@ -31,7 +31,9 @@ class Folder(db.Model):
 class PDFFile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(100), unique=True, nullable=False)
-    text = db.Column(db.Text, nullable=False)
+    text = db.Column(
+        db.Text, nullable=True
+    )  # Optional - for legacy uploads; new imports fetch from Ragflow
     figures = db.Column(db.Text)
     captions = db.Column(db.Text)
     summary = db.Column(db.Text, nullable=True)
@@ -45,8 +47,45 @@ class PDFFile(db.Model):
         onupdate=db.func.current_timestamp(),
     )
 
+    # Ragflow references - for on-demand fetching
+    ragflow_document_id = db.Column(
+        db.String(100), nullable=True
+    )  # Ragflow document ID
+    ragflow_dataset_id = db.Column(db.String(100), nullable=True)  # Ragflow dataset ID
+
+    # Helper property to check if content should be fetched from Ragflow
+    @property
+    def is_ragflow_backed(self):
+        """Returns True if this file should fetch content from Ragflow."""
+        return bool(self.ragflow_document_id and self.ragflow_dataset_id)
+
+    # Helper property to get content (from local or fetch from Ragflow)
+    def get_content(self, ragflow_client=None):
+        """Get document content - local or from Ragflow."""
+        if self.text:
+            return self.text
+
+        if self.is_ragflow_backed and ragflow_client:
+            try:
+                return ragflow_client.get_document_content(
+                    self.ragflow_dataset_id, self.ragflow_document_id
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to fetch content from Ragflow for file {self.id}: {e}"
+                )
+                return None
+
+        return None
+
     def __repr__(self):
         return f"<PDFFile {self.filename}>"
+
+
+# Import logger for get_content method
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Task(db.Model):
