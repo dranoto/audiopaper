@@ -4,6 +4,9 @@
 
 {% block header_actions %}
 <div class="header-actions">
+    <button class="btn btn-ghost" id="sidebar-toggle" title="Toggle Sidebar">
+        <i class="bi bi-layout-sidebar"></i>
+    </button>
     <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-ghost" title="Ragflow Browser">
         <i class="bi bi-collection-fill"></i>
     </a>
@@ -16,7 +19,8 @@
 {% block content %}
 {% if not current_file %}
 <div class="workflow-container">
-    <div class="upload-section">
+    <div id="main-content">
+        <div class="upload-section">
         <div class="upload-card">
             <div class="upload-icon">
                 <i class="bi bi-file-earmark-pdf"></i>
@@ -46,7 +50,7 @@
         </div>
     </div>
     
-    <div class="library-sidebar">
+    <div id="sidebar" class="library-sidebar">
         <h4>Library</h4>
         {% if all_files %}
         <div class="library-list">
@@ -66,13 +70,10 @@
             Import from Ragflow
         </a>
     </div>
-
-    <button class="btn btn-primary library-toggle" onclick="toggleLibrary()" title="Toggle Library">
-        <i class="bi bi-collection"></i>
-    </button>
 </div>
 {% else %}
 <div class="workflow-container">
+    <div id="main-content">
     <div class="file-info-bar">
         <div class="file-details">
             <i class="bi bi-file-earmark-pdf"></i>
@@ -120,24 +121,12 @@
                 <h3><span class="step-num" id="progress-step-num">2</span> <span id="progress-title-text">Generating Summary</span></h3>
             </div>
             <div class="step-content">
-                <div class="inline-progress-container">
-                    <div class="progress-steps-inline mb-3">
-                        <span class="step-dot active"></span>
-                        <span class="step-label">Ingest</span>
-                        <span class="step-line"></span>
-                        <span class="step-dot active"></span>
-                        <span class="step-label">Summary</span>
-                        <span class="step-line"></span>
-                        <span class="step-dot"></span>
-                        <span class="step-label">Script</span>
-                        <span class="step-line"></span>
-                        <span class="step-dot"></span>
-                        <span class="step-label">Audio</span>
-                    </div>
+                <div class="inline-progress-container active" id="inline-progress-container">
+                    <div class="spinner"></div>
+                    <p class="progress-status" id="progress-status-text">Analyzing paper and creating summary...</p>
                     <div class="progress-bar-container" style="max-width: 400px; margin: 0 auto;">
                         <div id="inline-progress-bar" class="progress-bar" style="width: 10%;"></div>
                     </div>
-                    <p id="progress-status-text" class="text-muted mt-2 text-center">Analyzing paper and creating summary...</p>
                 </div>
             </div>
         </div>
@@ -179,15 +168,14 @@
                 <div class="step-header">
                     <h3><span class="step-num">2</span> Summary</h3>
                     <div class="btn-group">
-                        <button class="btn btn-sm btn-ghost" onclick="showSummary()">View</button>
                         <button class="btn btn-sm btn-ghost" onclick="regenerateSummary()" title="Regenerate">
                             <i class="bi bi-arrow-repeat"></i>
                         </button>
                     </div>
                 </div>
                 <div class="step-content">
-                    <div class="summary-preview">
-                        {{ current_file.summary[:500] }}...
+                    <div class="content-display summary-display">
+                        {{ current_file.summary }}
                     </div>
                 </div>
             </div>
@@ -205,15 +193,15 @@
                     {% endif %}
                 </div>
                 {% if current_file.transcript %}
-                <div class="transcript-preview">
-                    {{ current_file.transcript[:300] }}...
+                <div class="content-display transcript-display">
+                    {{ current_file.transcript }}
                 </div>
                 {% if current_file.audio_exists %}
                 <div class="mt-3 text-success">
                     <i class="bi bi-check-circle"></i> Audio ready!
                 </div>
                 {% else %}
-                <button class="btn btn-primary btn-lg w-100 mt-3" id="btn-generate-audio" onclick="generatePodcast()">
+                <button class="btn btn-cta mt-3" id="btn-generate-audio" onclick="generatePodcast()">
                     <i class="bi bi-play-circle"></i>
                     Generate Audio
                 </button>
@@ -292,7 +280,7 @@
         </div>
     </div>
 
-    <div class="library-sidebar">
+    <div id="sidebar" class="library-sidebar">
         <h4>Library</h4>
         <div class="library-list">
             {% for file in all_files %}
@@ -317,10 +305,7 @@
             New Upload
         </button>
     </div>
-
-    <button class="btn btn-primary library-toggle" onclick="toggleLibrary()" title="Toggle Library">
-        <i class="bi bi-collection"></i>
-    </button>
+    </div>
 </div>
 {% endif %}
 
@@ -421,6 +406,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initFileUpload();
     initMobileLibrary();
     initAutoGenerate();
+    initSidebar();
+    
+    // Pre-load chat datasets
+    if (document.getElementById('chat-modal')) {
+        loadRagflowDatasetsForChat();
+    }
 });
 
 function initRagflowDatasets() {
@@ -442,40 +433,51 @@ function initRagflowDatasets() {
 }
 
 function initFileUpload() {
-    document.getElementById('file-input')?.addEventListener('change', function() {
+    const fileInput = document.getElementById('file-input');
+    const uploadForm = document.getElementById('upload-form');
+    
+    fileInput?.addEventListener('change', function() {
         if (this.files.length > 0) {
-            document.getElementById('upload-form').submit();
+            // Show loading state
+            const btn = fileInput.nextElementSibling;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+            btn.disabled = true;
+            
+            uploadForm.submit();
+        }
+    });
+    
+    // Handle upload errors
+    uploadForm?.addEventListener('submit', function(e) {
+        // Check if file is valid
+        const fileInput = document.getElementById('file-input');
+        if (!fileInput || !fileInput.files.length) {
+            e.preventDefault();
+            alert('Please select a PDF file to upload.');
+            return;
+        }
+        
+        const file = fileInput.files[0];
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            e.preventDefault();
+            alert('Only PDF files are supported.');
+            return;
         }
     });
 }
 
 function initMobileLibrary() {
-    function toggleLibrary() {
-        const sidebars = document.querySelectorAll('.library-sidebar');
-        let anyVisible = false;
-        sidebars.forEach(sidebar => {
-            if (sidebar.classList.contains('visible')) {
-                anyVisible = true;
-            }
-        });
-        sidebars.forEach(sidebar => {
-            if (anyVisible) {
-                sidebar.classList.remove('visible');
-                sidebar.classList.add('collapsed');
-            } else {
-                sidebar.classList.remove('collapsed');
-                sidebar.classList.add('visible');
-            }
-        });
-    }
-    window.toggleLibrary = toggleLibrary;
-
     if (window.innerWidth <= 768) {
         document.querySelectorAll('.library-sidebar').forEach(sidebar => {
             sidebar.classList.remove('visible');
             sidebar.classList.add('collapsed');
         });
     }
+}
+
+function initSidebar() {
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    sidebarToggle?.addEventListener('click', window.toggleSidebar);
 }
 
 function initAutoGenerate() {

@@ -802,12 +802,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ==================== Workflow UI Functions ====================
+    // ==================== Global State ====================
     
-    let globalInlineMode = new URL(window.location).searchParams.get('inline') === 'true';
+    window.window.globalInlineMode = new URL(window.location).searchParams.get('inline') === 'true';
     let isGenerating = false;
     let currentEventSource = null;
     let currentTaskInterval = null;
+
+    // ==================== Sidebar Toggle ====================
+    
+    window.toggleSidebar = function() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('main-content');
+        sidebar?.classList.toggle('collapsed');
+        mainContent?.classList.toggle('sidebar-collapsed');
+    };
 
     const taskStepMap = {
         'summary': { step: 2, name: 'Summary', icon: 'bi-card-text' },
@@ -825,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
         }
 
-        globalInlineMode = true;
+        window.globalInlineMode = true;
         showLoading('Generating summary...');
         
         if (currentEventSource) {
@@ -886,7 +895,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
         }
 
-        globalInlineMode = true;
+        window.globalInlineMode = true;
         showLoading('Creating podcast script...', 'transcript');
         
         if (currentEventSource) {
@@ -975,7 +984,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
         }
 
-        globalInlineMode = true;
+        window.globalInlineMode = true;
         showLoading('Generating podcast audio...', 'podcast');
 
         const controller = new AbortController();
@@ -1070,7 +1079,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.showProgressModal = function(taskType, message) {
-        if (globalInlineMode) {
+        if (window.globalInlineMode) {
             const inlineDiv = document.getElementById('inline-progress');
             if (inlineDiv !== null) {
                 showLoading(message, taskType);
@@ -1203,7 +1212,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.showLoading = function(text, type = 'summary') {
         const inlineDiv = document.getElementById('inline-progress');
         const hasInlineElements = inlineDiv !== null;
-        const useInline = globalInlineMode && hasInlineElements;
+        const useInline = window.globalInlineMode && hasInlineElements;
 
         if (useInline) {
             const stepNumEl = document.getElementById('progress-step-num');
@@ -1250,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.pollTask = function(taskId, type, inline = null) {
         if (inline === null) {
-            inline = globalInlineMode;
+            inline = window.globalInlineMode;
         }
         
         const statusType = (type === 'summary') ? 'summarize' : type;

@@ -7,6 +7,8 @@
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",
   "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
   "icons": [
     {
       "src": "/static/icons/icon.svg",
@@ -18,13 +20,13 @@
       "src": "/static/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/static/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
   "categories": ["productivity", "education"],
@@ -33,13 +35,32 @@
       "name": "Upload PDF",
       "short_name": "Upload",
       "description": "Upload a new research paper",
-      "url": "/"
+      "url": "/",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Ragflow Browser",
       "short_name": "Ragflow",
       "description": "Import from Ragflow",
-      "url": "/ragflow"
+      "url": "/ragflow",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "file",
+          "accept": ["application/pdf", ".pdf"]
+        }
+      ]
+    }
+  },
+  "prefer_related_applications": false
 }

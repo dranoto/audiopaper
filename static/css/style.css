@@ -33,6 +33,29 @@ body {
     min-height: 100vh;
 }
 
+/* Offline Indicator */
+.offline-indicator {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: #f59e0b;
+    color: white;
+    text-align: center;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.offline-indicator i {
+    font-size: 16px;
+}
+
 /* ==================== Layout ==================== */
 
 /* App Container */
@@ -115,6 +138,47 @@ body {
     background: var(--bg-tertiary);
 }
 
+/* Prominent CTA Buttons */
+.btn-cta {
+    background: linear-gradient(135deg, var(--accent), #6366f1);
+    color: white;
+    padding: 16px 32px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: var(--radius);
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
+    transition: all 0.3s;
+}
+
+.btn-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+}
+
+.btn-cta:active {
+    transform: translateY(0);
+}
+
+.btn-cta:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-cta.loading {
+    animation: pulse-cta 1.5s infinite;
+}
+
+@keyframes pulse-cta {
+    0%, 100% { box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3); }
+    50% { box-shadow: 0 4px 25px rgba(79, 70, 229, 0.5); }
+}
+
+/* Success state */
+.btn-cta.success {
+    background: linear-gradient(135deg, var(--success), #059669);
+}
+
 .btn-ghost {
     background: transparent;
     color: var(--text-secondary);
@@ -193,19 +257,42 @@ body {
 
 /* Workflow Container */
 .workflow-container {
-    display: grid;
-    grid-template-columns: 1fr 280px;
+    display: flex;
     gap: 24px;
+    min-height: calc(100vh - 140px);
 }
 
-/* Main content should be in first column */
-.workflow-container > .upload-section,
-.workflow-container > .workflow-content,
-.workflow-container > .file-info-bar,
-.workflow-container > .steps-indicator,
-.workflow-container > .inline-progress,
-.workflow-container > #workflow-steps-container {
-    grid-column: 1;
+#sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    transition: width 0.3s ease, margin 0.3s ease;
+}
+
+#sidebar.collapsed {
+    width: 0;
+    margin-left: -24px;
+    overflow: hidden;
+}
+
+#main-content {
+    flex: 1;
+    min-width: 0;
+    transition: margin-left 0.3s ease;
+}
+
+#main-content.sidebar-collapsed {
+    margin-left: 0;
+}
+
+#sidebar-toggle {
+    cursor: pointer;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    transition: background 0.2s;
+}
+
+#sidebar-toggle:hover {
+    background: var(--bg-tertiary);
 }
 
 /* Steps Indicator */
@@ -317,6 +404,36 @@ body {
 
 .step-content {
     margin-top: 20px;
+}
+
+/* Full Content Display */
+.content-display {
+    background: var(--bg-tertiary);
+    padding: 20px;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    max-height: 500px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.content-display p {
+    margin-bottom: 12px;
+}
+
+.content-display p:last-child {
+    margin-bottom: 0;
+}
+
+.summary-display {
+    border-left: 3px solid var(--accent);
+}
+
+.transcript-display {
+    border-left: 3px solid var(--success);
 }
 
 .summary-preview,
@@ -612,6 +729,31 @@ body {
 /* Inline Progress (for imports) */
 .inline-progress-container {
     padding: 20px;
+    text-align: center;
+}
+
+.inline-progress-container.active {
+    background: linear-gradient(135deg, var(--accent-light), #f0f9ff);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--accent);
+}
+
+.inline-progress-container .spinner {
+    width: 32px;
+    height: 32px;
+    margin: 0 auto 12px;
+}
+
+.inline-progress-container .progress-status {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.inline-progress-container .progress-percentage {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--accent);
 }
 
 .progress-steps-inline {
@@ -724,44 +866,37 @@ body {
 /* Responsive */
 @media (max-width: 768px) {
     .workflow-container {
-        grid-template-columns: 1fr;
+        flex-direction: column;
     }
 
-    .library-sidebar {
-        display: none;  /* Hidden by default */
+    #sidebar {
         position: fixed;
-        bottom: 0;
+        bottom: 70px;
         left: 0;
         right: 0;
-        z-index: 100;
-        max-height: 50vh;
-        overflow-y: auto;
+        width: 100% !important;
+        max-height: 45vh;
+        z-index: 99;
         border-radius: 20px 20px 0 0;
         box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
         padding: 20px;
         background: var(--bg-secondary);
+        overflow-y: auto;
+        margin-left: 0 !important;
     }
 
-    .library-sidebar.visible {
-        display: block;  /* Show when visible */
+    #sidebar.collapsed {
+        transform: translateY(100%);
+        width: 100% !important;
     }
 
-    .library-sidebar.collapsed {
-        display: none;  /* Hide when collapsed */
+    #main-content {
+        width: 100% !important;
+        margin-left: 0 !important;
     }
 
-    .library-toggle {
-        display: flex !important;
-        position: fixed;
-        bottom: 24px;
-        right: 24px;
-        z-index: 101;
-        border-radius: 50%;
-        width: 64px;
-        height: 64px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        padding: 0;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    #sidebar-toggle {
+        display: none;
     }
 
     .steps-indicator {
@@ -784,6 +919,116 @@ body {
         height: 28px;
         font-size: 12px;
     }
+
+/* Mobile Navigation - Hidden by default */
+.mobile-nav {
+    display: none;
+}
+
+/* Bottom Navigation for Mobile */
+.mobile-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        z-index: 100;
+        justify-content: space-around;
+        align-items: center;
+        padding: 0 16px;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    }
+
+    .mobile-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 16px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 11px;
+        gap: 4px;
+        border-radius: var(--radius-sm);
+        transition: all 0.2s;
+        min-width: 56px;
+        min-height: 48px;
+    }
+
+    .mobile-nav-item:hover,
+    .mobile-nav-item.active {
+        color: var(--accent);
+        background: var(--accent-light);
+    }
+
+    .mobile-nav-item i {
+        font-size: 20px;
+    }
+
+    /* Adjust main content padding for bottom nav */
+    .main-content {
+        padding-bottom: 100px;
+    }
+
+    /* Larger touch targets */
+    .btn {
+        min-height: 48px;
+        padding: 14px 20px;
+        font-size: 16px;
+    }
+
+    .btn-sm {
+        min-height: 40px;
+        min-width: 40px;
+    }
+
+    /* Larger form inputs */
+    input, select, textarea {
+        font-size: 16px;
+        min-height: 48px;
+    }
+
+    /* Mobile header */
+    .app-header {
+        padding: 0 12px;
+    }
+
+    .logo span {
+        display: none;
+    }
+
+    .header-actions .btn-ghost {
+        padding: 8px;
+    }
+
+    /* Full-width buttons on mobile */
+    .w-100-mobile {
+        width: 100%;
+    }
+
+    /* Workflow content padding for bottom nav */
+    .workflow-content {
+        padding-bottom: 80px;
+    }
+
+    /* Content display mobile */
+    .content-display {
+        max-height: 300px;
+        font-size: 14px;
+    }
+
+    /* Card mobile */
+    .workflow-step {
+        padding: 20px 16px;
+    }
+
+    .step-header h3 {
+        font-size: 16px;
+    }
+}
 
     .step-label {
         font-size: 11px;

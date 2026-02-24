@@ -22,6 +22,12 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    <!-- Offline Indicator -->
+    <div id="offline-indicator" class="offline-indicator" style="display: none;">
+        <i class="bi bi-wifi-off"></i>
+        You're offline - some features may be unavailable
+    </div>
+
     <div class="app-container">
         <header class="app-header">
             <div class="header-content">
@@ -36,10 +42,58 @@
         <main class="main-content">
             {% block content %}{% endblock %}
         </main>
+
+        <!-- Mobile Bottom Navigation -->
+        <nav class="mobile-nav">
+            <a href="{{ url_for('files.index') }}" class="mobile-nav-item">
+                <i class="bi bi-house"></i>
+                <span>Home</span>
+            </a>
+            <a href="{{ url_for('ragflow.ragflow_browser') }}" class="mobile-nav-item">
+                <i class="bi bi-collection"></i>
+                <span>Ragflow</span>
+            </a>
+            <button class="mobile-nav-item" onclick="window.toggleSidebar && window.toggleSidebar()">
+                <i class="bi bi-layout-sidebar"></i>
+                <span>Library</span>
+            </button>
+            <a href="{{ url_for('settings.settings') }}" class="mobile-nav-item">
+                <i class="bi bi-gear"></i>
+                <span>Settings</span>
+            </a>
+        </nav>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/service-worker.js')
+                    .then((registration) => {
+                        console.log('AudioPaper: Service Worker registered:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.error('AudioPaper: Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Offline indicator
+        function updateOnlineStatus() {
+            const indicator = document.getElementById('offline-indicator');
+            if (indicator) {
+                indicator.style.display = navigator.onLine ? 'none' : 'flex';
+            }
+        }
+        
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus();
+    </script>
+    
     {% block scripts %}{% endblock %}
 </body>
 </html>
