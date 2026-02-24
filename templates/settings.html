@@ -89,30 +89,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.play-sample-button').forEach(button => {
-        button.addEventListener('click', function() {
-            const selectId = this.getAttribute('data-target-select');
-            const voice = document.getElementById(selectId).value;
-            
-            fetch('/play_voice_sample', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({voice: voice})
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.error) {
-                    alert('Error: ' + data.error);
-                    return;
-                }
-                const audio = new Audio(data.audio_url);
-                audio.play();
-            })
-            .catch(err => alert('Error: ' + err));
-        });
-    });
-});
-</script>
+{# Settings page initializes automatically via main.js #}
 {% endblock %}

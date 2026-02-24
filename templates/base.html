@@ -70,6 +70,16 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Module scripts (load in order) -->
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/pdf-viewer.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/file-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/content-generator.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/progress.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     
     <!-- Theme Toggle -->
