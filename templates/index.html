@@ -380,7 +380,11 @@
             </button>
         </div>
         <div class="modal-body" style="white-space: pre-wrap; font-size: 13px; line-height: 1.6;">
+            {% if current_file.text %}
             <div id="original-text-content">{{ current_file.text }}</div>
+            {% else %}
+            <p class="text-muted">Original text is not available for this file.</p>
+            {% endif %}
         </div>
     </div>
 </div>
