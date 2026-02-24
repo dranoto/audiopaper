@@ -28,6 +28,32 @@ os.makedirs(app.config["GENERATED_AUDIO_FOLDER"], exist_ok=True)
 
 init_db(app)
 
+# Initialize task queue and register handlers
+from utils.task_queue import TaskQueue
+from tasks.workers import (
+    _run_summary_generation,
+    _run_transcript_generation,
+    _run_podcast_generation,
+)
+
+task_queue = TaskQueue.get_instance(max_workers=3)
+task_queue.register_handler("summary", _run_summary_generation)
+task_queue.register_handler("transcript", _run_transcript_generation)
+task_queue.register_handler("podcast", _run_podcast_generation)
+
+# Start background workers
+task_queue.start_workers(app)
+
+# Register cleanup on shutdown
+import atexit
+
+
+def cleanup_task_queue():
+    task_queue.stop_workers()
+
+
+atexit.register(cleanup_task_queue)
+
 from routes import register_blueprints
 
 register_blueprints(app)

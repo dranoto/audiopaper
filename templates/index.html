@@ -238,6 +238,21 @@
             </div>
             {% endif %}
 
+            <!-- Task Status Section -->
+            <div class="workflow-step" id="task-status-section" style="display: none;">
+                <div class="step-header">
+                    <h3><i class="bi bi-list-task"></i> Processing Status</h3>
+                    <button class="btn btn-sm btn-ghost" onclick="refreshTaskStatus()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="step-content">
+                    <div id="task-list" class="task-list">
+                        <!-- Task items will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
             <div class="workflow-step">
                 <div class="step-header">
                     <h3><i class="bi bi-chat-dots"></i> Chat with Document</h3>
