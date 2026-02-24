@@ -1,115 +1,118 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body class="settings-page">
-    <div class="container mt-5">
-        <div class="row">
-            <div class="col-md-8 offset-md-2">
-                <div class="card">
-                    <div class="card-header">
-                        <h1>Settings</h1>
-                        <p class="text-muted mb-0">API keys and models are configured via .env file</p>
-                    </div>
-                    <div class="card-body">
-                        <form action="{{ url_for('settings') }}" method="post">
-                            <!-- Configuration Reference - Read Only -->
-                            <div class="alert alert-info">
-                                <h5><i class="bi bi-info-circle"></i> Configuration</h5>
-                                <p class="mb-1"><strong>NanoGPT:</strong> Text generation (summaries, transcripts, chat)</p>
-                                <p class="mb-1"><strong>DeepInfra:</strong> Text-to-speech (Kokoro)</p>
-                                <p class="mb-1"><strong>Ragflow:</strong> Document browser</p>
-                                <p class="mb-0"><strong>Models:</strong> All configured in .env file</p>
-                            </div>
+{% extends "base.html" %}
 
-                            <hr>
-                            <h3>Prompts</h3>
-                            <div class="mb-3">
-                                <label for="summary_prompt" class="form-label">Summary Prompt</label>
-                                <textarea class="form-control" id="summary_prompt" name="summary_prompt" rows="3">{{ settings.summary_prompt }}</textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label for="transcript_prompt" class="form-label">Transcript Prompt</label>
-                                <textarea class="form-control" id="transcript_prompt" name="transcript_prompt" rows="5">{{ settings.transcript_prompt }}</textarea>
-                            </div>
-                            
-                            <hr>
-                            <h3>Podcast Settings</h3>
-                            <div class="mb-3">
-                                <label for="transcript_length" class="form-label">Podcast Length</label>
-                                <select class="form-select" id="transcript_length" name="transcript_length">
-                                    <option value="short" {% if settings.transcript_length == 'short' %}selected{% endif %}>Short (2-3 min)</option>
-                                    <option value="medium" {% if settings.transcript_length == 'medium' or not settings.transcript_length %}selected{% endif %}>Medium (5-7 min)</option>
-                                    <option value="long" {% if settings.transcript_length == 'long' %}selected{% endif %}>Long (10+ min)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="tts_host_voice" class="form-label">Host Voice</label>
-                                <div class="input-group">
-                                    <select class="form-select" id="tts_host_voice" name="tts_host_voice">
-                                        {% for voice_id, voice_desc in voices %}
-                                            <option value="{{ voice_id }}" {% if voice_id == settings.tts_host_voice %}selected{% endif %}>{{ voice_desc }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button class="btn btn-outline-secondary play-sample-button" type="button" data-target-select="tts_host_voice">
-                                        <i class="bi bi-volume-up-fill"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="tts_expert_voice" class="form-label">Expert Voice</label>
-                                <div class="input-group">
-                                    <select class="form-select" id="tts_expert_voice" name="tts_expert_voice">
-                                        {% for voice_id, voice_desc in voices %}
-                                            <option value="{{ voice_id }}" {% if voice_id == settings.tts_expert_voice %}selected{% endif %}>{{ voice_desc }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button class="btn btn-outline-secondary play-sample-button" type="button" data-target-select="tts_expert_voice">
-                                        <i class="bi bi-volume-up-fill"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save"></i>
-                                Save Changes
-                            </button>
-                        </form>
+{% block title %}Settings - AudioPaper{% endblock %}
+
+{% block header_actions %}
+<div class="header-actions">
+    <a href="{{ url_for('files.index') }}" class="btn btn-ghost" title="Library">
+        <i class="bi bi-house"></i>
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <div class="settings-card">
+        <div class="settings-header">
+            <h1><i class="bi bi-gear"></i> Settings</h1>
+            <p class="text-muted">API keys and models are configured via .env file</p>
+        </div>
+
+        <form action="{{ url_for('settings.settings') }}" method="post" class="settings-form">
+            <div class="config-info">
+                <h5><i class="bi bi-info-circle"></i> Configuration</h5>
+                <ul>
+                    <li><strong>NanoGPT:</strong> Text generation (summaries, transcripts, chat)</li>
+                    <li><strong>DeepInfra:</strong> Text-to-speech (Kokoro)</li>
+                    <li><strong>Ragflow:</strong> Document browser</li>
+                    <li><strong>Models:</strong> All configured in .env file</li>
+                </ul>
+            </div>
+
+            <div class="settings-section">
+                <h3>Prompts</h3>
+                <div class="form-group">
+                    <label for="summary_prompt">Summary Prompt</label>
+                    <textarea class="form-control" id="summary_prompt" name="summary_prompt" rows="3">{{ settings.summary_prompt }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="transcript_prompt">Transcript Prompt</label>
+                    <textarea class="form-control" id="transcript_prompt" name="transcript_prompt" rows="5">{{ settings.transcript_prompt }}</textarea>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h3>Podcast Settings</h3>
+                <div class="form-group">
+                    <label for="transcript_length">Podcast Length</label>
+                    <select class="form-select" id="transcript_length" name="transcript_length">
+                        <option value="short" {% if settings.transcript_length == 'short' %}selected{% endif %}>Short (2-3 min)</option>
+                        <option value="medium" {% if settings.transcript_length == 'medium' or not settings.transcript_length %}selected{% endif %}>Medium (5-7 min)</option>
+                        <option value="long" {% if settings.transcript_length == 'long' %}selected{% endif %}>Long (10+ min)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tts_host_voice">Host Voice</label>
+                    <div class="input-group">
+                        <select class="form-select" id="tts_host_voice" name="tts_host_voice">
+                            {% for voice_id, voice_desc in voices %}
+                                <option value="{{ voice_id }}" {% if voice_id == settings.tts_host_voice %}selected{% endif %}>{{ voice_desc }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-outline play-sample-button" type="button" data-target-select="tts_host_voice">
+                            <i class="bi bi-volume-up-fill"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="tts_expert_voice">Expert Voice</label>
+                    <div class="input-group">
+                        <select class="form-select" id="tts_expert_voice" name="tts_expert_voice">
+                            {% for voice_id, voice_desc in voices %}
+                                <option value="{{ voice_id }}" {% if voice_id == settings.tts_expert_voice %}selected{% endif %}>{{ voice_desc }}</option>
+                            {% endfor %}
+                        </select>
+                        <button class="btn btn-outline play-sample-button" type="button" data-target-select="tts_expert_voice">
+                            <i class="bi bi-volume-up-fill"></i>
+                        </button>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="bi bi-save"></i>
+                Save Changes
+            </button>
+        </form>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Voice sample playback
-        document.querySelectorAll('.play-sample-button').forEach(button => {
-            button.addEventListener('click', function() {
-                const selectId = this.getAttribute('data-target-select');
-                const voice = document.getElementById(selectId).value;
-                
-                fetch('/play_voice_sample', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({voice: voice})
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.error) {
-                        alert('Error: ' + data.error);
-                        return;
-                    }
-                    const audio = new Audio(data.audio_url);
-                    audio.play();
-                })
-                .catch(err => alert('Error: ' + err));
-            });
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.play-sample-button').forEach(button => {
+        button.addEventListener('click', function() {
+            const selectId = this.getAttribute('data-target-select');
+            const voice = document.getElementById(selectId).value;
+            
+            fetch('/play_voice_sample', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({voice: voice})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                const audio = new Audio(data.audio_url);
+                audio.play();
+            })
+            .catch(err => alert('Error: ' + err));
         });
-    </script>
-</body>
-</html>
+    });
+});
+</script>
+{% endblock %}

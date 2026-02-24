@@ -1,5 +1,6 @@
 /* AudioPaper - Clean & Professional */
 
+/* ==================== CSS Variables ==================== */
 :root {
     --bg-primary: #f8f9fa;
     --bg-secondary: #ffffff;
@@ -31,6 +32,8 @@ body {
     color: var(--text-primary);
     min-height: 100vh;
 }
+
+/* ==================== Layout ==================== */
 
 /* App Container */
 .app-container {
@@ -791,7 +794,8 @@ body {
     }
 
     /* Mobile-friendly touch targets */
-    .btn {
+/* Buttons */
+.btn {
         min-height: 48px;
         padding: 12px 20px;
         font-size: 16px;
@@ -1153,4 +1157,148 @@ body {
 
 .chat-input-container input {
     flex: 1;
+}
+
+/* ==================== Settings Page ==================== */
+
+.settings-container {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.settings-card {
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border);
+}
+
+.settings-header {
+    margin-bottom: 32px;
+}
+
+.settings-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.settings-header h1 i {
+    color: var(--accent);
+}
+
+.config-info {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: 16px 20px;
+    margin-bottom: 32px;
+}
+
+.config-info h5 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-info ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.config-info li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.config-info li:last-child {
+    margin-bottom: 0;
+}
+
+.settings-section {
+    margin-bottom: 32px;
+}
+
+.settings-section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.form-group .form-control,
+.form-group .form-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    transition: border-color 0.2s;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.form-group .form-control:focus,
+.form-group .form-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.form-group textarea.form-control {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.form-group .input-group {
+    display: flex;
+    gap: 0;
+}
+
+.form-group .input-group .form-select {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    flex: 1;
+}
+
+.form-group .input-group .btn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    border-left: none;
+    padding: 12px 16px;
+}
+
+.settings-form .btn-primary {
+    width: 100%;
+    margin-top: 8px;
+}
+
+/* Settings page responsive */
+@media (max-width: 768px) {
+    .settings-card {
+        padding: 24px 16px;
+    }
+
+    .settings-header h1 {
+        font-size: 20px;
+    }
 }

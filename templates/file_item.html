@@ -1,6 +1,6 @@
 <li class="nav-item" id="file-item-{{ file.id }}">
     <div class="d-flex justify-content-between align-items-center file-item" 
-         data-url="{{ url_for('uploaded_file', filename=file.filename) }}"
+         data-url="{{ url_for('static.uploaded_file', filename=file.filename) }}"
          data-id="{{ file.id }}"
          data-filename="{{ file.filename }}" 
          style="cursor: pointer;">
