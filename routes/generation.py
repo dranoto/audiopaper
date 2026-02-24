@@ -18,6 +18,7 @@ from tasks.workers import (
     _run_summary_generation,
     _run_transcript_generation,
     _run_podcast_generation,
+    _get_document_content,
 )
 from utils.task_queue import TaskStatus
 
@@ -84,7 +85,7 @@ def create_generation_bp(app):
                 for token in generate_text_stream(
                     app.text_client,
                     model_name,
-                    pdf_file.text,
+                    _get_document_content(pdf_file, settings),
                     prompt,
                     "You are a helpful research assistant that summarizes documents clearly.",
                 ):
