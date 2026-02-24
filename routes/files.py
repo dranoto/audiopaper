@@ -15,21 +15,26 @@ from tasks.workers import _run_summary_generation
 def create_files_bp(app):
     bp = Blueprint("files", __name__)
 
+    FILES_PER_PAGE = 50
+
     @bp.route("/")
     def index():
         file_id = request.args.get("file", type=int)
         generate = request.args.get("generate")
+        page = request.args.get("page", 1, type=int)
         current_file = PDFFile.query.get(file_id) if file_id else None
 
-        all_files = PDFFile.query.order_by(PDFFile.id.desc()).all()
+        pagination = PDFFile.query.order_by(PDFFile.id.desc()).paginate(
+            page=page, per_page=FILES_PER_PAGE, error_out=False
+        )
+        all_files = pagination.items
 
         from utils.audio import get_audio_filename
 
+        audio_folder = app.config["GENERATED_AUDIO_FOLDER"]
         for file in all_files:
             mp3_filename = get_audio_filename(file)
-            mp3_filepath = os.path.join(
-                app.config["GENERATED_AUDIO_FOLDER"], mp3_filename
-            )
+            mp3_filepath = os.path.join(audio_folder, mp3_filename)
             file.audio_exists = os.path.exists(mp3_filepath)
             file.audio_filename = mp3_filename
 
@@ -46,6 +51,8 @@ def create_files_bp(app):
             all_files=all_files,
             current_file=current_file,
             auto_generate=generate,
+            pagination=pagination,
+            current_page=page,
         )
 
     @bp.route("/upload", methods=["POST"])

@@ -1,6 +1,10 @@
 import os
+import logging
+
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
+
+logger = logging.getLogger(__name__)
 
 db = SQLAlchemy()
 
@@ -49,9 +53,16 @@ class PDFFile(db.Model):
 
     # Ragflow references - for on-demand fetching
     ragflow_document_id = db.Column(
-        db.String(100), nullable=True
+        db.String(100), nullable=True, index=True
     )  # Ragflow document ID
-    ragflow_dataset_id = db.Column(db.String(100), nullable=True)  # Ragflow dataset ID
+    ragflow_dataset_id = db.Column(
+        db.String(100), nullable=True, index=True
+    )  # Ragflow dataset ID
+
+    __table_args__ = (
+        db.Index("ix_pdffile_ragflow", "ragflow_document_id", "ragflow_dataset_id"),
+        db.Index("ix_pdffile_created", "created_at"),
+    )
 
     # Helper property to check if content should be fetched from Ragflow
     @property
@@ -82,16 +93,12 @@ class PDFFile(db.Model):
         return f"<PDFFile {self.filename}>"
 
 
-# Import logger for get_content method
-import logging
-
-logger = logging.getLogger(__name__)
-
-
 class Task(db.Model):
     id = db.Column(db.String(36), primary_key=True)  # UUID length
-    status = db.Column(db.String(20), nullable=False, default="processing")
+    status = db.Column(db.String(20), nullable=False, default="processing", index=True)
     result = db.Column(db.Text, nullable=True)  # Will store JSON result
+
+    __table_args__ = (db.Index("ix_task_status", "status"),)
 
     def __repr__(self):
         return f"<Task {self.id} [{self.status}]>"

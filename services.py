@@ -1,12 +1,15 @@
 import os
 import json
-import fitz  # PyMuPDF
+import fitz
 import io
 import re
 import pathlib
 from typing import Optional, Generator, List, Tuple, Any
 from pydub import AudioSegment
 from database import get_settings
+from config import config
+
+STATIC_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 
 # Try to import OpenAI for DeepInfra Kokoro TTS
 try:
@@ -344,7 +347,7 @@ def process_pdf(filepath):
     text = ""
     elements = []
     figure_dir = os.path.join(
-        "static", "figures", os.path.basename(filepath).replace(".pdf", "")
+        STATIC_PATH, "figures", os.path.basename(filepath).replace(".pdf", "")
     )
     os.makedirs(figure_dir, exist_ok=True)
 

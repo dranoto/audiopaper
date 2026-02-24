@@ -2,8 +2,10 @@ import json
 
 from flask import Blueprint, request, jsonify
 
-from database import PDFFile, get_settings
+from database import db, PDFFile, get_settings
 from ragflow_service import get_ragflow_client
+
+MAX_CHAT_HISTORY = 20
 
 
 def create_chat_bp(app):
@@ -100,9 +102,11 @@ def create_chat_bp(app):
 
             history.append({"role": "user", "parts": [{"text": question}]})
             history.append({"role": "model", "parts": [{"text": response_text}]})
-            pdf_file.chat_history = json.dumps(history)
-            from database import db
 
+            if len(history) > MAX_CHAT_HISTORY * 2:
+                history = history[-(MAX_CHAT_HISTORY * 2) :]
+
+            pdf_file.chat_history = json.dumps(history)
             db.session.commit()
 
             return jsonify(

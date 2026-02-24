@@ -370,17 +370,17 @@ def create_ragflow_bp(app):
         batch_id = request.args.get("batch_id")
 
         if file_id:
-            tasks = Task.query.all()
+            all_tasks = Task.query.order_by(Task.id.desc()).limit(200).all()
             filtered = [
                 t
-                for t in tasks
+                for t in all_tasks
                 if json.loads(t.result or "{}").get("file_id") == file_id
             ]
         elif batch_id:
-            tasks = Task.query.all()
+            all_tasks = Task.query.order_by(Task.id.desc()).limit(200).all()
             filtered = [
                 t
-                for t in tasks
+                for t in all_tasks
                 if json.loads(t.result or "{}").get("batch_id") == batch_id
             ]
         else:

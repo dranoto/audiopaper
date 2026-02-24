@@ -1,4 +1,5 @@
 import time
+import threading
 from functools import lru_cache
 from typing import Any, Callable, Optional
 import hashlib
@@ -6,63 +7,72 @@ import json
 
 
 class RagFlowCache:
-    """Cache for Ragflow API responses."""
+    """Thread-safe cache for Ragflow API responses."""
 
     def __init__(self, ttl_seconds=300):
         self._cache = {}
         self._ttl = ttl_seconds
+        self._lock = threading.RLock()
 
     def get(self, key):
-        if key in self._cache:
-            data, timestamp = self._cache[key]
-            if time.time() - timestamp < self._ttl:
-                return data
-            del self._cache[key]
+        with self._lock:
+            if key in self._cache:
+                data, timestamp = self._cache[key]
+                if time.time() - timestamp < self._ttl:
+                    return data
+                del self._cache[key]
         return None
 
     def set(self, key, data):
-        self._cache[key] = (data, time.time())
+        with self._lock:
+            self._cache[key] = (data, time.time())
 
     def invalidate(self, key):
-        if key in self._cache:
-            del self._cache[key]
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
 
 
 ragflow_cache = RagFlowCache(ttl_seconds=300)
 
 
 class SimpleCache:
-    """Simple in-memory cache with TTL support."""
+    """Thread-safe in-memory cache with TTL support."""
 
     def __init__(self, default_ttl: int = 300):
         self._cache = {}
         self._ttl = default_ttl
+        self._lock = threading.RLock()
 
     def get(self, key: str) -> Optional[Any]:
         """Get a value from cache."""
-        if key in self._cache:
-            value, timestamp = self._cache[key]
-            if time.time() - timestamp < self._ttl:
-                return value
-            del self._cache[key]
+        with self._lock:
+            if key in self._cache:
+                value, timestamp = self._cache[key]
+                if time.time() - timestamp < self._ttl:
+                    return value
+                del self._cache[key]
         return None
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set a value in cache with optional custom TTL."""
-        if ttl is None:
-            ttl = self._ttl
-        self._cache[key] = (value, time.time())
+        with self._lock:
+            if ttl is None:
+                ttl = self._ttl
+            self._cache[key] = (value, time.time())
 
     def delete(self, key: str) -> bool:
         """Delete a key from cache."""
-        if key in self._cache:
-            del self._cache[key]
-            return True
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+                return True
         return False
 
     def clear(self) -> None:
         """Clear all cache entries."""
-        self._cache.clear()
+        with self._lock:
+            self._cache.clear()
 
     def get_or_compute(
         self, key: str, compute_fn: Callable[[], Any], ttl: Optional[int] = None
@@ -78,10 +88,11 @@ class SimpleCache:
 
     def invalidate_prefix(self, prefix: str) -> int:
         """Invalidate all keys starting with prefix."""
-        keys_to_delete = [k for k in self._cache if k.startswith(prefix)]
-        for key in keys_to_delete:
-            del self._cache[key]
-        return len(keys_to_delete)
+        with self._lock:
+            keys_to_delete = [k for k in self._cache if k.startswith(prefix)]
+            for key in keys_to_delete:
+                del self._cache[key]
+            return len(keys_to_delete)
 
 
 # Global cache instance

@@ -5,6 +5,7 @@ from database import db, PDFFile, Task, get_settings
 from services import generate_text_with_file, generate_podcast_audio
 from ragflow_service import get_ragflow_client
 from utils.audio import get_audio_filename
+from utils.task_queue import TaskStatus
 
 
 def _get_document_content(pdf_file, settings):
@@ -64,7 +65,7 @@ def _run_summary_generation(app, task_id, file_id):
             )
 
             pdf_file.summary = response_text
-            task.status = "complete"
+            task.status = TaskStatus.COMPLETE
             task.result = json.dumps({"success": True})
             db.session.commit()
             app.logger.info(f"Task {task_id}: Summary saved for file_id {file_id}.")
@@ -76,7 +77,7 @@ def _run_summary_generation(app, task_id, file_id):
             )
             task = Task.query.get(task_id)
             if task:
-                task.status = "error"
+                task.status = TaskStatus.ERROR
                 task.result = json.dumps({"error": str(e)})
                 db.session.commit()
 
@@ -127,7 +128,7 @@ def _run_transcript_generation(app, task_id, file_id):
 
             pdf_file.transcript = transcript_text
 
-            task.status = "complete"
+            task.status = TaskStatus.COMPLETE
             task.result = json.dumps({"success": True, "transcript": transcript_text})
             db.session.commit()
             app.logger.info(f"Task {task_id}: Transcript saved for file_id {file_id}.")
@@ -139,7 +140,7 @@ def _run_transcript_generation(app, task_id, file_id):
             )
             task = Task.query.get(task_id)
             if task:
-                task.status = "error"
+                task.status = TaskStatus.ERROR
                 task.result = json.dumps({"error": str(e)})
                 db.session.commit()
 
@@ -220,7 +221,7 @@ def _run_podcast_generation(app, task_id, file_id):
 
             audio_url = url_for("generated_audio", filename=mp3_filename)
 
-            task.status = "complete"
+            task.status = TaskStatus.COMPLETE
             task.result = json.dumps({"audio_url": audio_url})
             db.session.commit()
             app.logger.info(
@@ -234,6 +235,6 @@ def _run_podcast_generation(app, task_id, file_id):
             )
             task = Task.query.get(task_id)
             if task:
-                task.status = "error"
+                task.status = TaskStatus.ERROR
                 task.result = json.dumps({"error": str(e)})
                 db.session.commit()
