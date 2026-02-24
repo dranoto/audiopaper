@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -7,7 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y ffmpeg
 
 # Create necessary directories
-RUN mkdir -p /app/uploads /app/static
+RUN mkdir -p /app/uploads /app/generated_audio /app/static/figures /app/instance
 
 # Copy the dependencies file to the working directory
 COPY requirements.txt .
