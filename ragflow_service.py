@@ -47,6 +47,11 @@ class RagflowClient:
             return [d for d in all_datasets if d.get("name") in self.allowed_datasets]
         return all_datasets
 
+    def get_dataset(self, dataset_id):
+        """Get a single dataset by ID."""
+        result = self.request("GET", f"/datasets/{dataset_id}")
+        return result.get("data", {})
+
     def list_documents(self, dataset_id, page=1, size=100):
         result = self.request(
             "GET", f"/datasets/{dataset_id}/documents?page={page}&size={size}"

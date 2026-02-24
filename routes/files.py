@@ -39,6 +39,7 @@ def create_files_bp(app):
         page = request.args.get("page", 1, type=int)
         search_query = request.args.get("search", "").strip()
         filter_tag = request.args.get("tag", "").strip()
+        filter_dataset = request.args.get("dataset", "").strip()
         current_file = PDFFile.query.get(file_id) if file_id else None
 
         query = PDFFile.query
@@ -48,6 +49,65 @@ def create_files_bp(app):
                 PDFFile.filename.ilike(f"%{search_query}%")
                 | PDFFile.summary.ilike(f"%{search_query}%")
             )
+
+        if filter_tag:
+            query = query.filter(PDFFile.tags.ilike(f'%"{filter_tag}"%'))
+
+        if filter_dataset:
+            if filter_dataset == "_uncategorized":
+                query = query.filter(PDFFile.ragflow_dataset_id.is_(None))
+            else:
+                query = query.filter(PDFFile.ragflow_dataset_name == filter_dataset)
+
+        pagination = query.order_by(PDFFile.id.desc()).paginate(
+            page=page, per_page=FILES_PER_PAGE, error_out=False
+        )
+        all_files = pagination.items
+
+        from utils.audio import get_audio_filename
+
+        audio_folder = app.config["GENERATED_AUDIO_FOLDER"]
+        for file in all_files:
+            mp3_filename = get_audio_filename(file)
+            mp3_filepath = os.path.join(audio_folder, mp3_filename)
+            file.audio_exists = os.path.exists(mp3_filepath)
+            file.audio_filename = mp3_filename
+
+        if current_file:
+            mp3_filename = get_audio_filename(current_file)
+            mp3_filepath = os.path.join(
+                app.config["GENERATED_AUDIO_FOLDER"], mp3_filename
+            )
+            current_file.audio_exists = os.path.exists(mp3_filepath)
+            current_file.audio_filename = mp3_filename
+
+        all_tags = get_all_tags()
+
+        dataset_groups = (
+            db.session.query(PDFFile.ragflow_dataset_name, db.func.count(PDFFile.id))
+            .filter(PDFFile.ragflow_dataset_name.isnot(None))
+            .group_by(PDFFile.ragflow_dataset_name)
+            .all()
+        )
+
+        uncategorized_count = PDFFile.query.filter(
+            PDFFile.ragflow_dataset_id.is_(None)
+        ).count()
+
+        return render_template(
+            "index.html",
+            all_files=all_files,
+            current_file=current_file,
+            auto_generate=generate,
+            pagination=pagination,
+            current_page=page,
+            search_query=search_query,
+            filter_tag=filter_tag,
+            filter_dataset=filter_dataset,
+            all_tags=all_tags,
+            dataset_groups=dataset_groups,
+            uncategorized_count=uncategorized_count,
+        )
 
         if filter_tag:
             query = query.filter(PDFFile.tags.ilike(f'%"{filter_tag}"%'))
@@ -93,46 +153,84 @@ def create_files_bp(app):
         if "file" not in request.files:
             return redirect(request.url)
         file = request.files["file"]
-        folder_id = request.form.get("folder_id")
-        upload_to_ragflow = request.form.get("upload_to_ragflow")
         ragflow_dataset = request.form.get("ragflow_dataset")
 
         if file.filename == "" or not allowed_file(file.filename):
             return redirect(request.url)
 
+        if not ragflow_dataset:
+            return redirect(
+                url_for(
+                    "files.index", error="Please select a Ragflow dataset to upload to"
+                )
+            )
+
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(filepath)
 
-        text, elements_json, _ = process_pdf(filepath)
-        new_file = PDFFile(
-            filename=filename, text=text, figures=elements_json, captions=json.dumps([])
-        )
-        if folder_id:
-            new_file.folder_id = folder_id
-        db.session.add(new_file)
-        db.session.commit()
-
-        if upload_to_ragflow == "on" and ragflow_dataset:
-            try:
-                settings = get_settings()
-                client = get_ragflow_client(settings)
-                if client:
-                    markdown_content = f"# {filename}\n\n{text}"
-                    temp_md = f"/tmp/{filename.rsplit('.', 1)[0]}.md"
-                    with open(temp_md, "w") as f:
-                        f.write(markdown_content)
-
-                    result = client.request(
-                        "POST",
-                        f"/datasets/{ragflow_dataset}/documents",
-                        files={"file": open(temp_md, "rb")},
+        try:
+            settings = get_settings()
+            client = get_ragflow_client(settings)
+            if not client:
+                return redirect(
+                    url_for(
+                        "files.index",
+                        error="Ragflow not configured. Please set up Ragflow in settings.",
                     )
-                    os.remove(temp_md)
-            except Exception as e:
-                app.logger.error(f"Failed to upload to Ragflow: {e}")
+                )
 
-        return redirect(url_for("files.index", file=new_file.id, generate="summary"))
+            text, elements_json, _ = process_pdf(filepath)
+
+            markdown_content = f"# {filename}\n\n{text}"
+            temp_md = f"/tmp/{filename.rsplit('.', 1)[0]}.md"
+            with open(temp_md, "w") as f:
+                f.write(markdown_content)
+
+            result = client.request(
+                "POST",
+                f"/datasets/{ragflow_dataset}/documents",
+                files={"file": open(temp_md, "rb")},
+            )
+            os.remove(temp_md)
+
+            ragflow_document_id = result.get("data", {}).get("document", {}).get("id")
+            if not ragflow_document_id:
+                app.logger.error(
+                    f"Ragflow upload response missing document ID: {result}"
+                )
+                return redirect(
+                    url_for(
+                        "files.index", error="Failed to get document ID from Ragflow"
+                    )
+                )
+
+            dataset_info = client.get_dataset(ragflow_dataset)
+            ragflow_dataset_name = dataset_info.get("name", "Unknown Dataset")
+
+            new_file = PDFFile(
+                filename=filename,
+                text=None,
+                figures=elements_json,
+                captions=json.dumps([]),
+                ragflow_document_id=ragflow_document_id,
+                ragflow_dataset_id=ragflow_dataset,
+                ragflow_dataset_name=ragflow_dataset_name,
+            )
+            db.session.add(new_file)
+            db.session.commit()
+
+            os.remove(filepath)
+
+            return redirect(
+                url_for("files.index", file=new_file.id, generate="summary")
+            )
+
+        except Exception as e:
+            app.logger.error(f"Failed to upload to Ragflow: {e}")
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return redirect(url_for("files.index", error=f"Failed to upload: {str(e)}"))
 
     @bp.route("/file_content/<int:file_id>")
     def file_content(file_id):

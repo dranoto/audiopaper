@@ -35,18 +35,13 @@
                 </button>
                 
                 <div class="upload-options mt-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="upload_to_ragflow" name="upload_to_ragflow">
-                        <label class="form-check-label" for="upload_to_ragflow">
-                            Also upload to Ragflow
-                        </label>
-                    </div>
-                    <select class="form-select form-select-sm mt-2" name="ragflow_dataset" id="ragflow-dataset-select" style="display: none;">
-                        <option value="">Loading datasets...</option>
+                    <label class="form-label">Upload to Ragflow Dataset:</label>
+                    <select class="form-select form-select-sm" name="ragflow_dataset" id="ragflow-dataset-select" required>
+                        <option value="">Select a dataset...</option>
                     </select>
                 </div>
             </form>
-            <p class="upload-hint">Supported: PDF files</p>
+            <p class="upload-hint">Supported: PDF files (will be uploaded to Ragflow)</p>
         </div>
     </div>
     
@@ -300,6 +295,17 @@
         
         <div class="library-search">
             <form method="get" action="{{ url_for('files.index') }}" id="library-search-form">
+                {% if dataset_groups or uncategorized_count > 0 %}
+                <select name="dataset" class="form-select form-select-sm mb-2" onchange="this.form.submit()">
+                    <option value="">All Files</option>
+                    {% for dataset_name, count in dataset_groups %}
+                    <option value="{{ dataset_name }}" {% if filter_dataset == dataset_name %}selected{% endif %}>{{ dataset_name }} ({{ count }})</option>
+                    {% endfor %}
+                    {% if uncategorized_count > 0 %}
+                    <option value="_uncategorized" {% if filter_dataset == '_uncategorized' %}selected{% endif %}>Uncategorized ({{ uncategorized_count }})</option>
+                    {% endif %}
+                </select>
+                {% endif %}
                 <div class="input-group input-group-sm">
                     <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ search_query or '' }}">
                     <button class="btn btn-outline" type="submit">
@@ -314,7 +320,7 @@
                     {% endfor %}
                 </select>
                 {% endif %}
-                {% if search_query or filter_tag %}
+                {% if search_query or filter_tag or filter_dataset %}
                 <a href="{{ url_for('files.index') }}" class="btn btn-sm btn-link mt-1">Clear filters</a>
                 {% endif %}
             </form>

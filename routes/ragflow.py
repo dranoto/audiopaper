@@ -131,6 +131,10 @@ def create_ragflow_bp(app):
             return jsonify({"error": "Ragflow not configured"}), 400
 
         try:
+            # Get dataset name
+            dataset_info = client.get_dataset(dataset_id)
+            dataset_name = dataset_info.get("name", "Unknown Dataset")
+
             # Get document info from cache or API
             cache_key = f"docs_{dataset_id}_all"
             cached = ragflow_cache.get(cache_key)
@@ -173,6 +177,7 @@ def create_ragflow_bp(app):
                 captions="[]",
                 ragflow_document_id=document_id,
                 ragflow_dataset_id=dataset_id,
+                ragflow_dataset_name=dataset_name,
             )
             db.session.add(new_file)
             db.session.commit()
@@ -245,6 +250,10 @@ def create_ragflow_bp(app):
         task_ids = []
 
         try:
+            # Get dataset name
+            dataset_info = client.get_dataset(dataset_id)
+            dataset_name = dataset_info.get("name", "Unknown Dataset")
+
             # Get all documents info
             cache_key = f"docs_{dataset_id}_all"
             cached = ragflow_cache.get(cache_key)
@@ -287,6 +296,7 @@ def create_ragflow_bp(app):
                     captions="[]",
                     ragflow_document_id=doc_id,
                     ragflow_dataset_id=dataset_id,
+                    ragflow_dataset_name=dataset_name,
                 )
                 db.session.add(new_file)
                 db.session.flush()

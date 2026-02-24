@@ -113,16 +113,12 @@ function initRagflowDatasets() {
         .then(data => {
             const select = document.getElementById('ragflow-dataset-select');
             if (select && data.datasets) {
-                select.innerHTML = data.datasets.map(d =>
-                    `<option value="${d.id}">${d.name}</option>`
-                ).join('');
+                select.innerHTML = '<option value="">Select a dataset...</option>' +
+                    data.datasets.map(d =>
+                        `<option value="${d.id}">${d.name}</option>`
+                    ).join('');
             }
         });
-    
-    document.getElementById('upload_to_ragflow')?.addEventListener('change', function() {
-        const select = document.getElementById('ragflow-dataset-select');
-        if (select) select.style.display = this.checked ? 'block' : 'none';
-    });
 }
 
 function initFileUpload() {

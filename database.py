@@ -60,6 +60,9 @@ class PDFFile(db.Model):
     ragflow_dataset_id = db.Column(
         db.String(100), nullable=True, index=True
     )  # Ragflow dataset ID
+    ragflow_dataset_name = db.Column(
+        db.String(200), nullable=True
+    )  # Friendly dataset name for UI
 
     __table_args__ = (
         db.Index("ix_pdffile_ragflow", "ragflow_document_id", "ragflow_dataset_id"),
@@ -212,4 +215,12 @@ def get_settings():
 def init_db(app):
     with app.app_context():
         db.init_app(app)
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as e:
+            logger.warning(
+                f"db.create_all() encountered an issue (tables may already exist): {e}"
+            )
+        from migrations import migrate_database
+
+        migrate_database(app)

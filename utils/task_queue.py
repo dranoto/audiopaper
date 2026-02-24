@@ -134,7 +134,7 @@ class TaskQueue:
         # Find tasks that aren't blocked by dependencies
         pending_tasks = (
             Task.query.filter(Task.status.in_([TaskStatus.PENDING, TaskStatus.QUEUED]))
-            .order_by(Task.status, Task.result.desc("priority"))
+            .order_by(Task.status, Task.result.desc())
             .all()
         )
 
