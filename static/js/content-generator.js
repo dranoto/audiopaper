@@ -133,7 +133,10 @@ function handlePollingError(fileId, type, err) {
 
 function summarizeFile(fileId) {
     showLoading(document.getElementById('summary-content'), 'Generating summary... This may take a moment.');
-    new bootstrap.Tab(document.getElementById('summary-tab')).show();
+    const summaryTab = document.getElementById('summary-tab');
+    if (summaryTab) {
+        new bootstrap.Tab(summaryTab).show();
+    }
     requestNotificationPermission();
 
     fetch(`/summarize_file/${fileId}`, { method: 'POST' })
@@ -156,7 +159,10 @@ function summarizeFile(fileId) {
 
 function generateTranscript(fileId) {
     showLoading(document.getElementById('transcript-content'), 'Generating transcript... This may take a moment.');
-    new bootstrap.Tab(document.getElementById('transcript-tab')).show();
+    const transcriptTab = document.getElementById('transcript-tab');
+    if (transcriptTab) {
+        new bootstrap.Tab(transcriptTab).show();
+    }
     requestNotificationPermission();
 
     fetch(`/generate_transcript/${fileId}`, { method: 'POST' })
