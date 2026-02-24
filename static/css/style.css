@@ -20,6 +20,23 @@
     --radius-sm: 8px;
 }
 
+[data-theme="dark"] {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #818cf8;
+    --accent-hover: #6366f1;
+    --accent-light: #312e81;
+    --success: #34d399;
+    --success-light: #064e3b;
+    --border: #334155;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -515,6 +532,17 @@ body {
     margin-bottom: 12px;
 }
 
+.library-search {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.library-search .input-group {
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
 .library-list {
     display: flex;
     flex-direction: column;
@@ -570,6 +598,29 @@ body {
 
 .library-item i {
     font-size: 14px;
+}
+
+.library-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.library-item-tags {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.tag-badge {
+    font-size: 9px;
+    padding: 1px 6px;
+    background: var(--accent-light);
+    color: var(--accent);
+    border-radius: 10px;
+    text-transform: uppercase;
+    font-weight: 600;
 }
 
 /* Progress Modal - Centered overlay for task progress */

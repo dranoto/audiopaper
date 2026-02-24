@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 
 from flask_sqlalchemy import SQLAlchemy
@@ -42,6 +43,7 @@ class PDFFile(db.Model):
     captions = db.Column(db.Text)
     summary = db.Column(db.Text, nullable=True)
     transcript = db.Column(db.Text, nullable=True)
+    tags = db.Column(db.Text, nullable=True)  # JSON array of tags
     chat_history = db.Column(db.Text, nullable=True)  # Store as JSON string
     folder_id = db.Column(db.Integer, db.ForeignKey("folder.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -69,6 +71,16 @@ class PDFFile(db.Model):
     def is_ragflow_backed(self):
         """Returns True if this file should fetch content from Ragflow."""
         return bool(self.ragflow_document_id and self.ragflow_dataset_id)
+
+    @property
+    def tags_list(self):
+        """Get tags as a Python list."""
+        if not self.tags:
+            return []
+        try:
+            return json.loads(self.tags)
+        except:
+            return []
 
     # Helper property to get content (from local or fetch from Ragflow)
     def get_content(self, ragflow_client=None):

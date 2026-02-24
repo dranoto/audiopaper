@@ -12,6 +12,21 @@ from ragflow_service import get_ragflow_client
 from tasks.workers import _run_summary_generation
 
 
+def get_all_tags():
+    """Get all unique tags from all files."""
+    all_files = PDFFile.query.filter(PDFFile.tags.isnot(None)).all()
+    tags_set = set()
+    for f in all_files:
+        if f.tags:
+            try:
+                tags = json.loads(f.tags)
+                if isinstance(tags, list):
+                    tags_set.update(tags)
+            except:
+                pass
+    return sorted(list(tags_set))
+
+
 def create_files_bp(app):
     bp = Blueprint("files", __name__)
 
@@ -22,9 +37,22 @@ def create_files_bp(app):
         file_id = request.args.get("file", type=int)
         generate = request.args.get("generate")
         page = request.args.get("page", 1, type=int)
+        search_query = request.args.get("search", "").strip()
+        filter_tag = request.args.get("tag", "").strip()
         current_file = PDFFile.query.get(file_id) if file_id else None
 
-        pagination = PDFFile.query.order_by(PDFFile.id.desc()).paginate(
+        query = PDFFile.query
+
+        if search_query:
+            query = query.filter(
+                PDFFile.filename.ilike(f"%{search_query}%")
+                | PDFFile.summary.ilike(f"%{search_query}%")
+            )
+
+        if filter_tag:
+            query = query.filter(PDFFile.tags.ilike(f'%"{filter_tag}"%'))
+
+        pagination = query.order_by(PDFFile.id.desc()).paginate(
             page=page, per_page=FILES_PER_PAGE, error_out=False
         )
         all_files = pagination.items
@@ -46,6 +74,8 @@ def create_files_bp(app):
             current_file.audio_exists = os.path.exists(mp3_filepath)
             current_file.audio_filename = mp3_filename
 
+        all_tags = get_all_tags()
+
         return render_template(
             "index.html",
             all_files=all_files,
@@ -53,6 +83,9 @@ def create_files_bp(app):
             auto_generate=generate,
             pagination=pagination,
             current_page=page,
+            search_query=search_query,
+            filter_tag=filter_tag,
+            all_tags=all_tags,
         )
 
     @bp.route("/upload", methods=["POST"])

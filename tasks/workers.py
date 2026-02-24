@@ -1,11 +1,66 @@
 import json
 import os
+import re
 from flask import url_for
 from database import db, PDFFile, Task, get_settings
 from services import generate_text_with_file, generate_podcast_audio
 from ragflow_service import get_ragflow_client
 from utils.audio import get_audio_filename
 from utils.task_queue import TaskStatus
+
+COMMON_TOPICS = [
+    "machine learning",
+    "deep learning",
+    "neural network",
+    "artificial intelligence",
+    "natural language processing",
+    "computer vision",
+    "robotics",
+    "reinforcement learning",
+    "data science",
+    "statistics",
+    "bioinformatics",
+    "genomics",
+    "medicine",
+    "healthcare",
+    "climate change",
+    "environment",
+    "physics",
+    "chemistry",
+    "materials science",
+    "quantum computing",
+    "blockchain",
+    "cybersecurity",
+    "networking",
+    "distributed systems",
+    "database",
+    "software engineering",
+    "algorithms",
+    "optimization",
+    "game theory",
+    "economics",
+    "psychology",
+    "sociology",
+    "education",
+    "policy",
+    "ethics",
+    "philosophy",
+]
+
+
+def extract_tags_from_summary(summary_text):
+    """Extract tags from summary using keyword matching."""
+    if not summary_text:
+        return []
+
+    summary_lower = summary_text.lower()
+    tags = []
+
+    for topic in COMMON_TOPICS:
+        if topic in summary_lower:
+            tags.append(topic.title())
+
+    return tags[:5]
 
 
 def _get_document_content(pdf_file, settings):
@@ -65,10 +120,17 @@ def _run_summary_generation(app, task_id, file_id):
             )
 
             pdf_file.summary = response_text
+
+            tags = extract_tags_from_summary(response_text)
+            if tags:
+                pdf_file.tags = json.dumps(tags)
+
             task.status = TaskStatus.COMPLETE
             task.result = json.dumps({"success": True})
             db.session.commit()
-            app.logger.info(f"Task {task_id}: Summary saved for file_id {file_id}.")
+            app.logger.info(
+                f"Task {task_id}: Summary saved for file_id {file_id} with tags: {tags}"
+            )
 
         except Exception as e:
             db.session.rollback()

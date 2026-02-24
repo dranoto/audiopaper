@@ -297,12 +297,44 @@
 
     <div id="sidebar" class="library-sidebar">
         <h4>Library</h4>
+        
+        <div class="library-search">
+            <form method="get" action="{{ url_for('files.index') }}" id="library-search-form">
+                <div class="input-group input-group-sm">
+                    <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ search_query or '' }}">
+                    <button class="btn btn-outline" type="submit">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+                {% if all_tags %}
+                <select name="tag" class="form-select form-select-sm mt-2" onchange="this.form.submit()">
+                    <option value="">All Tags</option>
+                    {% for tag in all_tags %}
+                    <option value="{{ tag }}" {% if filter_tag == tag %}selected{% endif %}>{{ tag }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                {% if search_query or filter_tag %}
+                <a href="{{ url_for('files.index') }}" class="btn btn-sm btn-link mt-1">Clear filters</a>
+                {% endif %}
+            </form>
+        </div>
+        
         <div class="library-list">
             {% for file in all_files %}
             <div class="library-item-row">
                 <a href="/?file={{ file.id }}" class="library-item {% if file.id == current_file.id %}active{% endif %}">
                     <i class="bi bi-file-earmark-text"></i>
-                    <span>{{ file.filename[:18] }}{% if file.filename|length > 18 %}...{% endif %}</span>
+                    <div class="library-item-info">
+                        <span>{{ file.filename[:18] }}{% if file.filename|length > 18 %}...{% endif %}</span>
+                        {% if file.tags_list %}
+                        <div class="library-item-tags">
+                            {% for tag in file.tags_list[:2] %}
+                            <span class="tag-badge">{{ tag[:8] }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
                     {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto" title="Summary ready"></i>{% endif %}
                 </a>
                 <button class="btn btn-ghost btn-sm library-delete" onclick="event.preventDefault(); deleteFile({{ file.id }})" title="Delete">
