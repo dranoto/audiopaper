@@ -174,7 +174,7 @@
                     </div>
                 </div>
                 <div class="step-content">
-                    <div class="content-display summary-display">
+                    <div class="content-display summary-display" data-markdown="{{ current_file.summary|e }}">
                         {{ current_file.summary }}
                     </div>
                 </div>
@@ -193,7 +193,7 @@
                     {% endif %}
                 </div>
                 {% if current_file.transcript %}
-                <div class="content-display transcript-display">
+                <div class="content-display transcript-display" data-markdown="{{ current_file.transcript|e }}">
                     {{ current_file.transcript }}
                 </div>
                 {% if current_file.audio_exists %}
@@ -447,5 +447,14 @@
 window.CURRENT_FILE_ID = {{ current_file.id if current_file else 'null' }};
 document.body.dataset.hasSummary = {{ 'true' if current_file and current_file.summary else 'false' }};
 window.ragflowDatasetsUrl = "{{ url_for('ragflow.ragflow_datasets') }}";
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Render markdown content
+    document.querySelectorAll('[data-markdown]').forEach(function(el) {
+        if (typeof marked !== 'undefined') {
+            el.innerHTML = marked.parse(el.textContent);
+        }
+    });
+});
 </script>
 {% endblock %}
