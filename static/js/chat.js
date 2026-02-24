@@ -2,8 +2,6 @@
 
 let chatHistory = [];
 
-window.appendChatMessage = appendChatMessage;
-
 function handleChatSubmit(event) {
     event.preventDefault();
     const chatInput = document.getElementById('chat-input');
@@ -78,7 +76,8 @@ function openChat() {
 }
 
 function loadRagflowDatasetsForChat() {
-    fetch('{{ url_for("ragflow.ragflow_datasets") }}')
+    const url = window.ragflowDatasetsUrl || '/ragflow/datasets';
+    fetch(url)
         .then(r => r.json())
         .then(data => {
             const select = document.getElementById('ragflow-dataset');
@@ -148,7 +147,9 @@ function sendChat() {
 }
 
 // Expose to window
+window.appendChatMessage = appendChatMessage;
 window.initChat = initChat;
 window.openChat = openChat;
 window.sendChat = sendChat;
 window.handleChatSubmit = handleChatSubmit;
+window.loadRagflowDatasetsForChat = loadRagflowDatasetsForChat;

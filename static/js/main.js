@@ -85,7 +85,8 @@ function initAutoGenerate() {
 
 // Page-specific initializations
 function initRagflowDatasets() {
-    fetch('{{ url_for("ragflow.ragflow_datasets") }}')
+    const url = window.ragflowDatasetsUrl || '/ragflow/datasets';
+    fetch(url)
         .then(r => r.json())
         .then(data => {
             const select = document.getElementById('ragflow-dataset-select');

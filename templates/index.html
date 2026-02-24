@@ -446,5 +446,6 @@
 <script>
 window.CURRENT_FILE_ID = {{ current_file.id if current_file else 'null' }};
 document.body.dataset.hasSummary = {{ 'true' if current_file and current_file.summary else 'false' }};
+window.ragflowDatasetsUrl = "{{ url_for('ragflow.ragflow_datasets') }}";
 </script>
 {% endblock %}
