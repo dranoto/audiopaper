@@ -37,6 +37,8 @@ function pollTaskStatus(taskUrl, fileId, type) {
                     updateFileContent(fileId);
                     showNotification(`${type} Generation Complete`, `The ${type.toLowerCase()} for your file is ready.`);
                     updateButtonState(fileId, type, 'complete');
+                    // Reload page to show server-rendered content
+                    setTimeout(() => window.location.reload(), 1000);
                 } else if (data.status === 'error') {
                     clearInterval(interval);
                     delete activePollers[fileId];
