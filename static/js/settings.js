@@ -53,7 +53,7 @@ function initSettingsPage() {
         })
         .catch(error => {
             console.error('Error playing voice sample:', error);
-            alert('Failed to play voice sample. See console for details.');
+            showToast('Failed to play voice sample. See console for details.', 'error');
             resetButtonState(button);
         });
     }
@@ -70,6 +70,20 @@ function initSettingsPage() {
                 const select = document.getElementById(targetId);
                 const voice = select.value;
                 playSample(button, voice);
+            }
+        });
+    });
+
+    // Password toggle functionality
+    const togglePasswordButtons = document.querySelectorAll('.toggle-password');
+    togglePasswordButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetId = button.dataset.target;
+            const input = document.getElementById(targetId);
+            if (input) {
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                button.querySelector('i').className = isPassword ? 'bi bi-eye-slash' : 'bi bi-eye';
             }
         });
     });

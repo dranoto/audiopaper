@@ -78,3 +78,44 @@ function closeModal(id) {
     const modal = document.getElementById(id);
     if (modal) modal.style.display = 'none';
 }
+
+function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icons = {
+        success: 'bi-check-lg',
+        error: 'bi-x-lg',
+        info: 'bi-info-lg',
+        warning: 'bi-exclamation-lg'
+    };
+    
+    toast.innerHTML = `
+        <div class="toast-icon">
+            <i class="bi ${icons[type] || icons.info}"></i>
+        </div>
+        <span class="toast-message">${escapeHtml(message)}</span>
+        <button class="toast-close" aria-label="Close notification">
+            <i class="bi bi-x"></i>
+        </button>
+    `;
+    
+    container.appendChild(toast);
+    
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => removeToast(toast));
+    
+    function removeToast(el) {
+        el.classList.add('removing');
+        setTimeout(() => el.remove(), 300);
+    }
+    
+    if (duration > 0) {
+        setTimeout(() => removeToast(toast), duration);
+    }
+}
+
+window.showToast = showToast;

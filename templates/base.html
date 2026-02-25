@@ -22,48 +22,73 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    
     <!-- Offline Indicator -->
-    <div id="offline-indicator" class="offline-indicator" style="display: none;">
+    <div id="offline-indicator" class="offline-indicator" role="status" aria-live="polite" style="display: none;">
         <i class="bi bi-wifi-off"></i>
         You're offline - some features may be unavailable
     </div>
 
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div id="flash-messages" class="flash-messages">
+          {% for category, message in messages %}
+          <div class="toast {{ category }}">
+              <div class="toast-icon">
+                  <i class="bi {% if category == 'success' %}bi-check-lg{% elif category == 'error' %}bi-x-lg{% else %}bi-info-lg{% endif %}"></i>
+              </div>
+              <span class="toast-message">{{ message }}</span>
+              <button class="toast-close" aria-label="Close">
+                  <i class="bi bi-x"></i>
+              </button>
+          </div>
+          {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
     <div class="app-container">
         <header class="app-header">
             <div class="header-content">
-                <a href="{{ url_for('files.index') }}" class="logo">
-                    <i class="bi bi-file-earmark-text"></i>
+                <a href="{{ url_for('files.index') }}" class="logo" aria-label="AudioPaper Home">
+                    <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
                     <span>AudioPaper</span>
                 </a>
                 <div class="header-actions">
-                    <button class="btn btn-ghost" id="theme-toggle" title="Toggle Theme">
-                        <i class="bi bi-moon-stars" id="theme-icon"></i>
+                    <button class="btn btn-ghost" id="theme-toggle" title="Toggle Theme" aria-label="Toggle dark/light theme">
+                        <i class="bi bi-moon-stars" id="theme-icon" aria-hidden="true"></i>
                     </button>
                     {% block header_actions %}{% endblock %}
                 </div>
             </div>
         </header>
 
-        <main class="main-content">
+        <main class="main-content" id="main-content" role="main">
             {% block content %}{% endblock %}
         </main>
 
         <!-- Mobile Bottom Navigation -->
-        <nav class="mobile-nav">
-            <a href="{{ url_for('files.index') }}" class="mobile-nav-item">
-                <i class="bi bi-house"></i>
+        <nav class="mobile-nav" aria-label="Main navigation">
+            <a href="{{ url_for('files.index') }}" class="mobile-nav-item" aria-label="Home">
+                <i class="bi bi-house" aria-hidden="true"></i>
                 <span>Home</span>
             </a>
-            <a href="{{ url_for('ragflow.ragflow_browser') }}" class="mobile-nav-item">
-                <i class="bi bi-collection"></i>
+            <a href="{{ url_for('ragflow.ragflow_browser') }}" class="mobile-nav-item" aria-label="Ragflow">
+                <i class="bi bi-collection" aria-hidden="true"></i>
                 <span>Ragflow</span>
             </a>
-            <button class="mobile-nav-item" onclick="window.toggleSidebar && window.toggleSidebar()">
-                <i class="bi bi-layout-sidebar"></i>
+            <button class="mobile-nav-item" onclick="window.toggleSidebar && window.toggleSidebar()" aria-label="Toggle Library sidebar">
+                <i class="bi bi-layout-sidebar" aria-hidden="true"></i>
                 <span>Library</span>
             </button>
-            <a href="{{ url_for('settings.settings') }}" class="mobile-nav-item">
-                <i class="bi bi-gear"></i>
+            <a href="{{ url_for('settings.settings') }}" class="mobile-nav-item" aria-label="Settings">
+                <i class="bi bi-gear" aria-hidden="true"></i>
                 <span>Settings</span>
             </a>
         </nav>
@@ -131,6 +156,25 @@
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
         updateOnlineStatus();
+    </script>
+    
+    <!-- Flash Messages Auto-hide -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const flashMessages = document.querySelectorAll('.flash-messages .toast');
+            flashMessages.forEach(function(toast) {
+                setTimeout(function() {
+                    toast.classList.add('removing');
+                    setTimeout(function() { toast.remove(); }, 300);
+                }, 4000);
+                
+                const closeBtn = toast.querySelector('.toast-close');
+                closeBtn?.addEventListener('click', function() {
+                    toast.classList.add('removing');
+                    setTimeout(function() { toast.remove(); }, 300);
+                });
+            });
+        });
     </script>
     
     {% block scripts %}{% endblock %}

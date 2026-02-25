@@ -64,10 +64,10 @@ function retryTask(taskId) {
             if (data.success) {
                 refreshTaskStatus();
             } else {
-                alert('Failed to retry task: ' + (data.error || 'Unknown error'));
+                showToast('Failed to retry task: ' + (data.error || 'Unknown error'), 'error');
             }
         })
-        .catch(err => alert('Error: ' + err.message));
+        .catch(err => showToast('Error: ' + err.message, 'error'));
 }
 
 function initTaskStatus() {

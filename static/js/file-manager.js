@@ -9,11 +9,12 @@ function deleteFile(fileId) {
         .then(data => {
             if (data.success) {
                 document.getElementById(`file-item-${fileId}`)?.remove();
+                showToast('File deleted successfully', 'success');
             } else {
-                alert('Error deleting file: ' + data.error);
+                showToast('Error deleting file: ' + data.error, 'error');
             }
         })
-        .catch(err => alert('An error occurred: ' + err.message));
+        .catch(err => showToast('An error occurred: ' + err.message, 'error'));
 }
 
 function renameFile(fileId, oldFilename) {
@@ -43,11 +44,12 @@ function renameFile(fileId, oldFilename) {
                         renameButton.dataset.filename = data.new_filename;
                     }
                 }
+                showToast('File renamed successfully', 'success');
             } else {
-                alert('Error renaming file: ' + data.error);
+                showToast('Error renaming file: ' + data.error, 'error');
             }
         })
-        .catch(err => alert('An error occurred: ' + err.message));
+        .catch(err => showToast('An error occurred: ' + err.message, 'error'));
     }
 }
 
@@ -68,15 +70,16 @@ function moveFile(fileId) {
                     const targetList = document.getElementById(targetListId);
                     if (targetList) {
                         targetList.appendChild(fileElement);
+                        showToast('File moved successfully', 'success');
                     } else {
-                        alert('Error: Target folder not found in the UI.');
+                        showToast('Target folder not found in the UI', 'error');
                     }
                 }
             } else {
-                alert('Error moving file: ' + data.error);
+                showToast('Error moving file: ' + data.error, 'error');
             }
         })
-        .catch(err => alert('An error occurred: ' + err.message));
+        .catch(err => showToast('An error occurred: ' + err.message, 'error'));
     }
 }
 
@@ -89,11 +92,12 @@ function deleteFolder(folderId) {
         .then(data => {
             if (data.success) {
                 document.getElementById(`folder-item-${folderId}`)?.remove();
+                showToast('Folder deleted successfully', 'success');
             } else {
-                alert('Error deleting folder: ' + data.error);
+                showToast('Error deleting folder: ' + data.error, 'error');
             }
         })
-        .catch(err => alert('An error occurred: ' + err.message));
+        .catch(err => showToast('An error occurred: ' + err.message, 'error'));
 }
 
 function renameFolder(folderId, oldName) {
@@ -115,11 +119,12 @@ function renameFolder(folderId, oldName) {
                         renameButton.dataset.name = newName;
                     }
                 }
+                showToast('Folder renamed successfully', 'success');
             } else {
-                alert('Error renaming folder: ' + data.error);
+                showToast('Error renaming folder: ' + data.error, 'error');
             }
         })
-        .catch(err => alert('An error occurred: ' + err.message));
+        .catch(err => showToast('An error occurred: ' + err.message, 'error'));
     }
 }
 

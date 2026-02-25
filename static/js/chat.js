@@ -44,7 +44,7 @@ function handleChatSubmit(event) {
     const chatForm = document.getElementById('chat-form');
 
     if (!window.currentFileId) {
-        alert('Please select a file first.');
+        showToast('Please select a file first.', 'warning');
         return;
     }
 

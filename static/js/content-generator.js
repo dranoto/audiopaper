@@ -136,7 +136,7 @@ function handlePollingError(fileId, type, err) {
 function summarizeFile(fileId) {
     fileId = fileId || window.CURRENT_FILE_ID;
     if (!fileId) {
-        alert('No file selected');
+        showToast('No file selected', 'warning');
         return;
     }
     showLoading(document.getElementById('summary-content'), 'Generating summary... This may take a moment.');
@@ -170,7 +170,7 @@ function summarizeFile(fileId) {
 function generateTranscript(fileId) {
     fileId = fileId || window.CURRENT_FILE_ID;
     if (!fileId) {
-        alert('No file selected');
+        showToast('No file selected', 'warning');
         return;
     }
     showLoading(document.getElementById('transcript-content'), 'Generating transcript... This may take a moment.');
@@ -204,12 +204,12 @@ function generateTranscript(fileId) {
 function generatePodcast(fileId) {
     fileId = fileId || window.CURRENT_FILE_ID;
     if (!fileId) {
-        alert('No file selected');
+        showToast('No file selected', 'warning');
         return;
     }
     const button = document.querySelector(`#file-item-${fileId} [data-action="generatePodcast"]`);
     if (!button) {
-        alert('Button not found');
+        showToast('Button not found', 'error');
         return;
     }
     button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generating...`;

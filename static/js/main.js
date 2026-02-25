@@ -60,9 +60,9 @@ window.saveAndGenerate = function() {
         window.closeModal('transcript-modal');
         window.generatePodcast();
     })
-    .catch(err => {
-        alert('Error saving transcript: ' + err);
-    });
+        .catch(err => {
+            showToast('Error saving transcript: ' + err, 'error');
+        });
 };
 
 window.closeModal = window.closeModal;
@@ -76,12 +76,12 @@ window.deleteFile = function(fileId) {
         .then(r => r.json())
         .then(data => {
             if (data.error) {
-                alert('Error: ' + data.error);
+                showToast('Error: ' + data.error, 'error');
             } else {
                 window.location.href = '/';
             }
         })
-        .catch(err => alert('Error: ' + err));
+        .catch(err => showToast('Error: ' + err, 'error'));
 };
 
 // Auto-generate initialization (from index.html inline script)
@@ -124,13 +124,120 @@ function initRagflowDatasets() {
 function initFileUpload() {
     const fileInput = document.getElementById('file-input');
     const uploadForm = document.getElementById('upload-form');
+    const dropzone = document.getElementById('dropzone');
+    const uploadProgress = document.getElementById('upload-progress');
+    
+    let xhr = null;
+
+    // Drag and drop handlers
+    if (dropzone) {
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        
+        dropzone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+        });
+        
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                handleFileSelect(files[0]);
+            } else if (files.length > 0) {
+                showToast('Please select a PDF file', 'error');
+            }
+        });
+        
+        // Click to browse
+        dropzone.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+                fileInput?.click();
+            }
+        });
+    }
+    
+    function handleFileSelect(file) {
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            showToast('Only PDF files are supported', 'error');
+            return;
+        }
+        
+        // Update UI
+        document.getElementById('upload-filename').textContent = file.name;
+        uploadProgress.style.display = 'block';
+        
+        // Create FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const ragflowDataset = document.getElementById('ragflow-dataset-select')?.value;
+        if (ragflowDataset) {
+            formData.append('ragflow_dataset', ragflowDataset);
+        }
+        
+        // Create XHR for progress
+        xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                document.getElementById('upload-percentage').textContent = percent + '%';
+                document.getElementById('upload-progress-fill').style.width = percent + '%';
+            }
+        });
+        
+        xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.error) {
+                        showToast('Upload failed: ' + data.error, 'error');
+                        resetUpload();
+                    } else {
+                        window.location.href = data.redirect || '/?file=' + data.file_id;
+                    }
+                } catch {
+                    window.location.href = '/';
+                }
+            } else {
+                showToast('Upload failed. Please try again.', 'error');
+                resetUpload();
+            }
+        });
+        
+        xhr.addEventListener('error', () => {
+            showToast('Upload failed. Please check your connection.', 'error');
+            resetUpload();
+        });
+        
+        xhr.open('POST', uploadForm.action);
+        xhr.send(formData);
+    }
+    
+    function resetUpload() {
+        uploadProgress.style.display = 'none';
+        document.getElementById('upload-percentage').textContent = '0%';
+        document.getElementById('upload-progress-fill').style.width = '0%';
+    }
+    
+    window.cancelUpload = function() {
+        if (xhr) {
+            xhr.abort();
+            showToast('Upload cancelled', 'info');
+            resetUpload();
+        }
+    };
+    
+    // Expose for button click
+    window.handleFileSelect = handleFileSelect;
     
     fileInput?.addEventListener('change', function() {
         if (this.files.length > 0) {
-            const btn = fileInput.nextElementSibling;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
-            btn.disabled = true;
-            uploadForm.submit();
+            handleFileSelect(this.files[0]);
         }
     });
     
@@ -138,14 +245,14 @@ function initFileUpload() {
         const fileInput = document.getElementById('file-input');
         if (!fileInput || !fileInput.files.length) {
             e.preventDefault();
-            alert('Please select a PDF file to upload.');
+            showToast('Please select a PDF file to upload.', 'error');
             return;
         }
         
         const file = fileInput.files[0];
         if (!file.name.toLowerCase().endsWith('.pdf')) {
             e.preventDefault();
-            alert('Only PDF files are supported.');
+            showToast('Only PDF files are supported.', 'error');
             return;
         }
     });

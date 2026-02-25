@@ -1,4 +1,4 @@
-from flask import Blueprint, request, redirect, url_for, render_template
+from flask import Blueprint, request, redirect, url_for, render_template, flash
 
 from database import db, get_settings
 from services import (
@@ -40,9 +40,31 @@ def create_settings_bp(app):
             s.summary_prompt = request.form.get("summary_prompt")
             s.transcript_prompt = request.form.get("transcript_prompt")
             s.transcript_length = request.form.get("transcript_length", "medium")
+
+            # Save API keys (only if provided, to preserve existing keys)
+            api_key_nanogpt = request.form.get("api_key_nanogpt", "").strip()
+            if api_key_nanogpt:
+                s.nanogpt_api_key = api_key_nanogpt
+
+            api_key_deepinfra = request.form.get("api_key_deepinfra", "").strip()
+            if api_key_deepinfra:
+                s.deepinfra_api_key = api_key_deepinfra
+
+            api_key_ragflow = request.form.get("api_key_ragflow", "").strip()
+            if api_key_ragflow:
+                s.ragflow_api_key = api_key_ragflow
+
+            api_key_gemini = request.form.get("api_key_gemini", "").strip()
+            if api_key_gemini:
+                s.gemini_api_key = api_key_gemini
+
             db.session.commit()
             init_tts_client(app)
             init_text_client(app)
+
+            from flask import flash
+
+            flash("Settings saved successfully!", "success")
             return redirect(url_for("settings.settings"))
 
         return render_template(

@@ -430,7 +430,7 @@ function generatePodcast() {
         console.error('Generate podcast error:', err);
         isGenerating = false;
         resetGenerateButton('podcast');
-        alert('Error: ' + err.message);
+        showToast('Error: ' + err.message, 'error');
     });
 }
 

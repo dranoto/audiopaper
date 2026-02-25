@@ -27,21 +27,45 @@
             </div>
             <h2>Upload a Research Paper</h2>
             <p>Drop your PDF here or click to browse</p>
-            <form action="{{ url_for('files.upload_file') }}" method="post" enctype="multipart/form-data" id="upload-form">
-                <input type="file" name="file" id="file-input" accept="application/pdf" hidden>
-                <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file-input').click()">
-                    <i class="bi bi-upload"></i>
-                    Choose PDF
-                </button>
-                
-                <div class="upload-options mt-3">
-                    <label class="form-label">Upload to Ragflow Dataset:</label>
-                    <select class="form-select form-select-sm" name="ragflow_dataset" id="ragflow-dataset-select" required>
-                        <option value="">Select a dataset...</option>
-                    </select>
+            
+            <div class="dropzone" id="dropzone">
+                <div class="dropzone-content">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    <span>Drag & drop your PDF here</span>
+                    <small>or</small>
                 </div>
-            </form>
-            <p class="upload-hint">Supported: PDF files (will be uploaded to Ragflow)</p>
+                <form action="{{ url_for('files.upload_file') }}" method="post" enctype="multipart/form-data" id="upload-form">
+                    <input type="file" name="file" id="file-input" accept="application/pdf" hidden>
+                    <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file-input').click()">
+                        <i class="bi bi-upload"></i>
+                        Choose PDF
+                    </button>
+                </form>
+            </div>
+            
+            <div class="upload-progress-container" id="upload-progress" style="display: none;">
+                <div class="upload-progress-info">
+                    <span class="upload-filename" id="upload-filename"></span>
+                    <span class="upload-percentage" id="upload-percentage">0%</span>
+                </div>
+                <div class="upload-progress-bar">
+                    <div class="upload-progress-fill" id="upload-progress-fill"></div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="cancelUpload()" id="upload-cancel">
+                    <i class="bi bi-x-lg"></i> Cancel
+                </button>
+            </div>
+            
+            <div class="upload-options mt-3">
+                <label class="form-label">
+                    <i class="bi bi-collection"></i> Upload to Ragflow Dataset:
+                </label>
+                <select class="form-select form-select-sm" name="ragflow_dataset" id="ragflow-dataset-select" required>
+                    <option value="">Select a dataset...</option>
+                </select>
+                <small class="text-muted d-block mt-1">Select a dataset to enable Ragflow chat features</small>
+            </div>
+            <p class="upload-hint">Supported: PDF files (will be uploaded to Ragflow for AI features)</p>
         </div>
     </div>
     
@@ -87,23 +111,23 @@
         </div>
     </div>
 
-    <div class="steps-indicator">
-        <div class="step {% if current_file.text %}completed{% elif current_file %}active{% endif %}">
+    <div class="steps-indicator" role="navigation" aria-label="Workflow progress">
+        <div class="step {% if current_file.text %}completed{% elif current_file %}active{% endif %}" title="Step 1: PDF is uploaded and text is extracted" aria-label="Step 1 Ingest: Complete">
             <div class="step-number">1</div>
             <div class="step-label">Ingest</div>
         </div>
         <div class="step-line"></div>
-        <div class="step {% if current_file.summary %}completed{% elif current_file and auto_generate %}active{% endif %}">
+        <div class="step {% if current_file.summary %}completed{% elif current_file and auto_generate %}active{% endif %}" title="Step 2: AI generates a summary of the paper" aria-label="Step 2 Summary: Generate summary">
             <div class="step-number">2</div>
             <div class="step-label">Summary</div>
         </div>
         <div class="step-line"></div>
-        <div class="step {% if current_file.transcript %}completed{% endif %}">
+        <div class="step {% if current_file.transcript %}completed{% endif %}" title="Step 3: AI creates a podcast script" aria-label="Step 3 Script: Generate podcast script">
             <div class="step-number">3</div>
             <div class="step-label">Script</div>
         </div>
         <div class="step-line"></div>
-        <div class="step {% if current_file.audio_exists %}completed{% endif %}">
+        <div class="step {% if current_file.audio_exists %}completed{% endif %}" title="Step 4: Convert script to audio podcast" aria-label="Step 4 Audio: Generate audio">
             <div class="step-number">4</div>
             <div class="step-label">Audio</div>
         </div>
@@ -137,7 +161,19 @@
                     {% if all_files %}
                     <p class="text-muted">Select a paper from the sidebar or upload a new one.</p>
                     {% else %}
-                    <p class="text-muted">No papers yet. Upload a PDF or import from Ragflow.</p>
+                    <div class="empty-state">
+                        <i class="bi bi-file-earmark-text"></i>
+                        <h4>No papers yet</h4>
+                        <p>Get started by uploading a PDF or importing from Ragflow</p>
+                        <div class="empty-state-actions">
+                            <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+                                <i class="bi bi-upload"></i> Upload PDF
+                            </button>
+                            <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-outline">
+                                <i class="bi bi-cloud-download"></i> Import from Ragflow
+                            </a>
+                        </div>
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -295,6 +331,15 @@
         
         <div class="library-search">
             <form method="get" action="{{ url_for('files.index') }}" id="library-search-form">
+                <div class="library-controls">
+                    <select name="sort" class="form-select form-select-sm" onchange="this.form.submit()" title="Sort files">
+                        <option value="newest" {% if sort_order == 'newest' or not sort_order %}selected{% endif %}>Newest First</option>
+                        <option value="oldest" {% if sort_order == 'oldest' %}selected{% endif %}>Oldest First</option>
+                        <option value="name_asc" {% if sort_order == 'name_asc' %}selected{% endif %}>Name (A-Z)</option>
+                        <option value="name_desc" {% if sort_order == 'name_desc' %}selected{% endif %}>Name (Z-A)</option>
+                        <option value="status" {% if sort_order == 'status' %}selected{% endif %}>Processing Status</option>
+                    </select>
+                </div>
                 {% if dataset_groups or uncategorized_count > 0 %}
                 <select name="dataset" class="form-select form-select-sm mb-2" onchange="this.form.submit()">
                     <option value="">All Files</option>
@@ -328,11 +373,16 @@
         
         <div class="library-list">
             {% for file in all_files %}
-            <div class="library-item-row">
+            <div class="library-item-row" title="{{ file.filename }}">
                 <a href="/?file={{ file.id }}" class="library-item {% if file.id == current_file.id %}active{% endif %}">
                     <i class="bi bi-file-earmark-text"></i>
                     <div class="library-item-info">
-                        <span>{{ file.filename[:18] }}{% if file.filename|length > 18 %}...{% endif %}</span>
+                        <span class="library-item-name">{{ file.filename[:20] }}{% if file.filename|length > 20 %}...{% endif %}</span>
+                        <span class="library-item-meta">
+                            {% if file.created_at %}
+                            <i class="bi bi-calendar3"></i> {{ file.created_at.strftime('%b %d') }}
+                            {% endif %}
+                        </span>
                         {% if file.tags_list %}
                         <div class="library-item-tags">
                             {% for tag in file.tags_list[:2] %}
@@ -341,9 +391,19 @@
                         </div>
                         {% endif %}
                     </div>
-                    {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto" title="Summary ready"></i>{% endif %}
+                    <div class="library-item-status">
+                        {% if file.audio_exists %}
+                        <i class="bi bi-check-circle-fill text-success" title="Audio ready"></i>
+                        {% elif file.summary %}
+                        <i class="bi bi-play-circle text-warning" title="Audio not generated"></i>
+                        {% elif file.text %}
+                        <i class="bi bi-hourglass text-muted" title="Processing"></i>
+                        {% else %}
+                        <i class="bi bi-circle text-muted" title="Not processed"></i>
+                        {% endif %}
+                    </div>
                 </a>
-                <button class="btn btn-ghost btn-sm library-delete" onclick="event.preventDefault(); deleteFile({{ file.id }})" title="Delete">
+                <button class="btn btn-ghost btn-sm library-delete" onclick="event.preventDefault(); deleteFile({{ file.id }})" title="Delete" aria-label="Delete {{ file.filename }}">
                     <i class="bi bi-trash"></i>
                 </button>
             </div>
