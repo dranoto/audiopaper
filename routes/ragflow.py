@@ -131,24 +131,30 @@ def create_ragflow_bp(app):
             return jsonify({"error": "Ragflow not configured"}), 400
 
         try:
-            # Get dataset name
-            dataset_info = client.get_dataset(dataset_id)
-            if not dataset_info:
-                return jsonify({"error": "Dataset not found in Ragflow"}), 400
-            dataset_name = dataset_info.get("name", "Unknown Dataset")
-
-            # Get document info from cache or API
+            # Get dataset name from cached documents (list_documents works, so use that)
             cache_key = f"docs_{dataset_id}_all"
             cached = ragflow_cache.get(cache_key)
             if cached and cached.get("documents"):
-                doc_info = next(
-                    (d for d in cached["documents"] if d.get("id") == document_id), {}
-                )
+                documents = cached["documents"]
             else:
                 documents, _ = client.list_documents(dataset_id, page=1, size=100)
-                doc_info = next(
-                    (d for d in documents if d.get("id") == document_id), {}
-                )
+                ragflow_cache.set(cache_key, {"documents": documents})
+            
+            # Try to get dataset name from first document's location, otherwise use default
+            dataset_name = "Unknown Dataset"
+            if documents:
+                first_doc = documents[0]
+                location = first_doc.get("location", "")
+                if location:
+                    # Extract dataset name from path like "/dataset_name/document.md"
+                    parts = location.strip("/").split("/")
+                    if len(parts) > 1:
+                        dataset_name = parts[0]
+
+            # Get document info from the already-fetched documents
+            doc_info = next(
+                (d for d in documents if d.get("id") == document_id), {}
+            )
 
             doc_title = doc_info.get("title", "") or doc_info.get(
                 "name", "Imported Document"
