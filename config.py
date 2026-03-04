@@ -11,9 +11,10 @@ from functools import lru_cache
 class Config:
     """Application configuration with defaults and environment override."""
 
-    # Database
+    # Database - use absolute path for instance folder
+    _INSTANCE_DIR: str = os.environ.get("INSTANCE_DIR", os.path.join(os.path.dirname(__file__), "instance"))
     SQLALCHEMY_DATABASE_URI: str = os.environ.get(
-        "DATABASE_URL", "sqlite:///instance/db.sqlite3"
+        "DATABASE_URL", f"sqlite:///{_INSTANCE_DIR}/db.sqlite3"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     SQLALCHEMY_ENGINE_OPTIONS: dict = {
@@ -85,6 +86,13 @@ class Config:
     def validate(cls) -> list:
         """Validate configuration and return list of issues."""
         issues = []
+
+        # Create instance directory for database
+        if not os.path.exists(cls._INSTANCE_DIR):
+            try:
+                os.makedirs(cls._INSTANCE_DIR, exist_ok=True)
+            except OSError as e:
+                issues.append(f"Cannot create INSTANCE_DIR: {e}")
 
         # Check required folders exist
         if not os.path.exists(cls.UPLOAD_FOLDER):

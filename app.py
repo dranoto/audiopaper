@@ -7,6 +7,9 @@ from services import init_tts_client, init_text_client
 from errors import register_error_handlers
 from config import config
 
+# Ensure instance directory exists for database
+INSTANCE_DIR = os.path.join(os.path.dirname(__file__), "instance")
+os.makedirs(INSTANCE_DIR, exist_ok=True)
 
 app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = config.UPLOAD_FOLDER
