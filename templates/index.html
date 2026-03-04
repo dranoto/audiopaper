@@ -147,9 +147,30 @@
                         <div id="inline-progress-bar" class="progress-bar" style="width: 10%;"></div>
                     </div>
                 </div>
-            </div>
         </div>
-        {% endif %}
+    
+        <div id="sidebar" class="library-sidebar">
+            <h4>Library</h4>
+            {% if all_files %}
+            <div class="library-list">
+                {% for file in all_files %}
+                <a href="/?file={{ file.id }}" class="library-item">
+                    <i class="bi bi-file-earmark-text"></i>
+                    <span>{{ file.filename[:25] }}{% if file.filename|length > 25 %}...{% endif %}</span>
+                    {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted small">No papers yet</p>
+            {% endif %}
+            <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-outline w-100 mt-3">
+                <i class="bi bi-cloud-download"></i>
+                Import from Ragflow
+            </a>
+        </div>
+    </div>
+{% endif %}
 
         <div id="workflow-steps-container">
             {% if not current_file %}

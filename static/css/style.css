@@ -1130,7 +1130,6 @@ body::before {
     height: fit-content;
     position: sticky !important;
     top: calc(var(--header-height) + var(--space-6)) !important;
-    grid-column: 2 !important;
     align-self: start;
     box-shadow: var(--shadow-sm);
 }
