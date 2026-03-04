@@ -175,33 +175,9 @@
                         <div id="inline-progress-bar" class="progress-bar" style="width: 10%;"></div>
                     </div>
                 </div>
+            </div>
         </div>
-    </div>
-{% endif %}
-
-        <div id="workflow-steps-container">
-            {% if not current_file %}
-            <div class="workflow-step">
-                <div class="step-header">
-                    <h3>Your Library</h3>
-                </div>
-                <div class="step-content">
-                    {% if all_files %}
-                    <p class="text-muted">Select a paper from the sidebar or upload a new one.</p>
-                    {% else %}
-                    <div class="empty-state">
-                        <i class="bi bi-file-earmark-text"></i>
-                        <h4>No papers yet</h4>
-                        <p>Get started by uploading a PDF or importing from Ragflow</p>
-                        <div class="empty-state-actions">
-                            <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
-                                <i class="bi bi-upload"></i> Upload PDF
-                            </button>
-                            <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-outline">
-                                <i class="bi bi-cloud-download"></i> Import from Ragflow
-                            </a>
-                        </div>
-                    </div>
+        {% endif %}
     </div>
 
     <!-- Right Sidebar - Actions -->
