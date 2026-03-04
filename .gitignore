@@ -14,6 +14,7 @@ static/figures/
 
 # Environment variables
 .env
+.env.save
 
 # macOS
 .DS_Store
