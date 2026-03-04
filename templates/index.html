@@ -19,6 +19,24 @@
 {% block content %}
 {% if not current_file %}
 <div class="workflow-container">
+    <!-- Left Sidebar - Library -->
+    <div id="library-sidebar" class="library-sidebar">
+        <h4>Library</h4>
+        {% if all_files %}
+        <div class="library-list">
+            {% for file in all_files %}
+            <a href="/?file={{ file.id }}" class="library-item">
+                <i class="bi bi-file-earmark-text"></i>
+                <span>{{ file.filename[:20] }}{% if file.filename|length > 20 %}...{% endif %}</span>
+                {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted small">No papers yet</p>
+        {% endif %}
+    </div>
+    
     <div id="main-content">
         <div class="upload-section">
         <div class="upload-card">
@@ -69,14 +87,25 @@
         </div>
     </div>
     
-    <div id="sidebar" class="library-sidebar">
+    <!-- Right Sidebar for no-file state -->
+    <div id="actions-sidebar" class="actions-sidebar">
+        <h4>Quick Actions</h4>
+        <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-outline w-100">
+            <i class="bi bi-cloud-download"></i> Import from Ragflow
+        </a>
+    </div>
+</div>
+{% else %}
+<div class="workflow-container">
+    <!-- Left Sidebar - Library -->
+    <div id="library-sidebar" class="library-sidebar">
         <h4>Library</h4>
         {% if all_files %}
         <div class="library-list">
             {% for file in all_files %}
-            <a href="/?file={{ file.id }}" class="library-item">
+            <a href="/?file={{ file.id }}" class="library-item{% if file.id == current_file.id %} active{% endif %}">
                 <i class="bi bi-file-earmark-text"></i>
-                <span>{{ file.filename[:25] }}{% if file.filename|length > 25 %}...{% endif %}</span>
+                <span>{{ file.filename[:20] }}{% if file.filename|length > 20 %}...{% endif %}</span>
                 {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
             </a>
             {% endfor %}
@@ -86,12 +115,11 @@
         {% endif %}
         <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-outline w-100 mt-3">
             <i class="bi bi-cloud-download"></i>
-            Import from Ragflow
+            Import
         </a>
     </div>
-</div>
-{% else %}
-<div class="workflow-container">
+
+    <!-- Center - Main Content -->
     <div id="main-content">
     <div class="file-info-bar">
         <div class="file-details">
@@ -148,27 +176,6 @@
                     </div>
                 </div>
         </div>
-    
-        <div id="sidebar" class="library-sidebar">
-            <h4>Library</h4>
-            {% if all_files %}
-            <div class="library-list">
-                {% for file in all_files %}
-                <a href="/?file={{ file.id }}" class="library-item">
-                    <i class="bi bi-file-earmark-text"></i>
-                    <span>{{ file.filename[:25] }}{% if file.filename|length > 25 %}...{% endif %}</span>
-                    {% if file.summary %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
-                </a>
-                {% endfor %}
-            </div>
-            {% else %}
-            <p class="text-muted small">No papers yet</p>
-            {% endif %}
-            <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-outline w-100 mt-3">
-                <i class="bi bi-cloud-download"></i>
-                Import from Ragflow
-            </a>
-        </div>
     </div>
 {% endif %}
 
@@ -198,7 +205,73 @@
                     {% endif %}
                 </div>
             </div>
-            {% endif %}
+        {% endfor %}
+        </div>
+        <a href="{{ url_for('ragflow.ragflow_browser') }}" class="btn btn-outline w-100 mt-3">
+            <i class="bi bi-cloud-download"></i>
+            Import
+        </a>
+        <button class="btn btn-outline w-100 mt-2" onclick="window.location.href='/'">
+            <i class="bi bi-plus-lg"></i> New Upload
+        </button>
+    </div>
+
+    <!-- Right Sidebar - Actions -->
+    <div id="actions-sidebar" class="actions-sidebar">
+        <h4>Actions</h4>
+        
+        {% if current_file %}
+        {% if not current_file.summary %}
+        <button class="btn btn-primary w-100 mb-3" id="btn-generate-summary" onclick="generateSummary()">
+            <i class="bi bi-lightning"></i> Generate Summary
+        </button>
+        {% endif %}
+        
+        {% if current_file.summary and not current_file.transcript %}
+        <button class="btn btn-primary w-100 mb-3" id="btn-generate-transcript" onclick="generateTranscript()">
+            <i class="bi bi-chat-dots"></i> Generate Script
+        </button>
+        {% endif %}
+        
+        {% if current_file.transcript %}
+        <div class="mb-3">
+            <button class="btn btn-outline w-100 mb-2" onclick="showTranscript()">
+                <i class="bi bi-pencil"></i> Edit Script
+            </button>
+            <button class="btn btn-cta w-100" id="btn-generate-audio" onclick="generatePodcast()">
+                <i class="bi bi-play-circle"></i> Generate Audio
+            </button>
+        </div>
+        {% endif %}
+        
+        {% if current_file.audio_exists %}
+        <div class="audio-player-small">
+            <audio controls class="w-100">
+                <source src="{{ url_for('static.generated_audio', filename=current_file.audio_filename) }}" type="audio/mpeg">
+            </audio>
+            <a href="{{ url_for('static.generated_audio', filename=current_file.audio_filename) }}" download class="btn btn-outline w-100 mt-2">
+                <i class="bi bi-download"></i> Download
+            </a>
+        </div>
+        {% endif %}
+        
+        {% if current_file.summary %}
+        <hr class="my-3">
+        <button class="btn btn-outline w-100 mb-2" onclick="window.generateSummary()">
+            <i class="bi bi-arrow-clockwise"></i> Re-summarize
+        </button>
+        {% endif %}
+        {% if current_file.transcript %}
+        <button class="btn btn-outline w-100" onclick="regenerateTranscript()">
+            <i class="bi bi-arrow-clockwise"></i> Re-generate Script
+        </button>
+        {% endif %}
+        {% else %}
+        <p class="text-muted small">Select a paper to see actions</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 
             {% if current_file and not current_file.summary and not auto_generate %}
             <div class="workflow-step">

@@ -771,11 +771,84 @@ body::before {
     margin-top: 12px;
 }
 
-/* Workflow Container */
+/* Workflow Container - 3 Column Layout like NotebookLM */
 .workflow-container {
-    display: flex;
+    display: grid;
+    grid-template-columns: 260px 1fr 280px;
     gap: var(--space-6);
     min-height: calc(100vh - var(--header-height) - var(--space-20));
+    padding: 0 var(--space-6);
+    align-items: start;
+}
+
+@media (max-width: 1200px) {
+    .workflow-container {
+        grid-template-columns: 220px 1fr 240px;
+    }
+}
+
+@media (max-width: 992px) {
+    .workflow-container {
+        grid-template-columns: 1fr;
+    }
+    #library-sidebar, #actions-sidebar {
+        display: none;
+    }
+}
+
+/* Left Sidebar - Library */
+#library-sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+}
+
+/* Right Sidebar - Actions */
+.actions-sidebar {
+    background: var(--color-bg-elevated);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    border: 1px solid var(--color-border-subtle);
+    height: fit-content;
+    position: sticky;
+    top: calc(var(--header-height) + var(--space-6));
+    box-shadow: var(--shadow-sm);
+}
+
+.actions-sidebar h4 {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    letter-spacing: 1px;
+    margin-bottom: var(--space-4);
+    font-weight: var(--font-weight-semibold);
+}
+
+.audio-player-small audio {
+    height: 40px;
+    border-radius: var(--radius-md);
+}
+
+#library-sidebar.collapsed {
+    width: 0;
+    margin-left: calc(var(--space-6) * -1);
+    overflow: hidden;
+}
+
+/* Right Sidebar - Actions */
+#actions-sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+}
+
+#actions-sidebar.collapsed {
+    width: 0;
+    margin-right: calc(var(--space-6) * -1);
+    overflow: hidden;
+}
+
+#main-content {
+    min-width: 0;
+    max-width: 100%;
 }
 
 #sidebar {
