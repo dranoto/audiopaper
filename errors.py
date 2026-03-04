@@ -20,14 +20,12 @@ def register_error_handlers(app):
 
     @app.errorhandler(404)
     def not_found(error):
-        if request_wants_json():
-            return jsonify(
-                {
-                    "error": "Not found",
-                    "message": "The requested resource was not found",
-                }
-            ), 404
-        return render_template("error.html", error="Page not found", code=404), 404
+        return jsonify(
+            {
+                "error": "Not found",
+                "message": "The requested resource was not found",
+            }
+        ), 404
 
     @app.errorhandler(405)
     def method_not_allowed(error):
