@@ -133,6 +133,8 @@ def create_ragflow_bp(app):
         try:
             # Get dataset name
             dataset_info = client.get_dataset(dataset_id)
+            if not dataset_info:
+                return jsonify({"error": "Dataset not found in Ragflow"}), 400
             dataset_name = dataset_info.get("name", "Unknown Dataset")
 
             # Get document info from cache or API

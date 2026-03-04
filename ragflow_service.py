@@ -24,7 +24,8 @@ class RagflowClient:
         try:
             resp = self.session.request(method, url, **kwargs)
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+            return data if data else {}
         except requests.exceptions.HTTPError as e:
             # Try to get more details from the response
             try:
@@ -50,6 +51,8 @@ class RagflowClient:
     def get_dataset(self, dataset_id):
         """Get a single dataset by ID."""
         result = self.request("GET", f"/datasets/{dataset_id}")
+        if not result:
+            return None
         return result.get("data", {})
 
     def list_documents(self, dataset_id, page=1, size=100):
