@@ -53,7 +53,10 @@ class RagflowClient:
         result = self.request("GET", f"/datasets/{dataset_id}")
         if not result:
             return None
-        return result.get("data", {})
+        # Some endpoints return data directly, others wrap in "data" key
+        if "data" in result:
+            return result.get("data") or {}
+        return result
 
     def list_documents(self, dataset_id, page=1, size=100):
         result = self.request(
