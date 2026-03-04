@@ -63,7 +63,7 @@ def migrate_database(app):
                     logger.info(f"Creating missing table: {table_name}")
                     model_class.__table__.create(db.engine)
                 else:
-                    _migrate_table_columns(table_name, model_class, inspector)
+                    _migrate_table_columns(db, table_name, model_class, inspector)
                     _create_indexes(db, model_class, table_name, existing_indexes.get(table_name, set()))
             except Exception as e:
                 logger.warning(f"Migration failed for table '{table_name}': {e}")
@@ -71,7 +71,7 @@ def migrate_database(app):
         logger.info("Database migration completed")
 
 
-def _migrate_table_columns(table_name, model_class, inspector):
+def _migrate_table_columns(db, table_name, model_class, inspector):
     """Add missing columns to a table."""
 
     try:
