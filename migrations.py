@@ -40,6 +40,8 @@ def migrate_database(app):
             logger.warning(f"Failed to create inspector: {e}")
             return
 
+        existing_tables = set(inspector.get_table_names())
+
         models = [
             ("folder", Folder),
             ("pdf_file", PDFFile),
@@ -49,7 +51,11 @@ def migrate_database(app):
 
         for table_name, model_class in models:
             try:
-                _migrate_table_columns(table_name, model_class, inspector)
+                if table_name not in existing_tables:
+                    logger.info(f"Creating missing table: {table_name}")
+                    model_class.__table__.create(db.engine)
+                else:
+                    _migrate_table_columns(table_name, model_class, inspector)
             except Exception as e:
                 logger.warning(f"Migration failed for table '{table_name}': {e}")
 

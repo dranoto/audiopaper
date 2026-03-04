@@ -13,7 +13,7 @@ class Config:
 
     # Database
     SQLALCHEMY_DATABASE_URI: str = os.environ.get(
-        "DATABASE_URL", "sqlite:///db.sqlite3"
+        "DATABASE_URL", "sqlite:///instance/db.sqlite3"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     SQLALCHEMY_ENGINE_OPTIONS: dict = {

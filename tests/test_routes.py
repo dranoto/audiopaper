@@ -18,6 +18,7 @@ def app():
     with _app.app_context():
         from database import db
 
+        db.init_app(_app)
         db.create_all()
 
     yield _app
@@ -25,6 +26,7 @@ def app():
     with _app.app_context():
         from database import db
 
+        db.session.remove()
         db.drop_all()
 
 

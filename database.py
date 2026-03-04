@@ -202,14 +202,20 @@ def get_settings():
     settings = Settings.query.first()
     if settings:
         return settings
-    try:
-        settings = Settings()
-        db.session.add(settings)
-        db.session.commit()
-        return settings
-    except IntegrityError:
-        db.session.rollback()
-        return Settings.query.first()
+    
+    for _ in range(3):
+        try:
+            settings = Settings()
+            db.session.add(settings)
+            db.session.commit()
+            return settings
+        except IntegrityError:
+            db.session.rollback()
+            settings = Settings.query.first()
+            if settings:
+                return settings
+    
+    return Settings.query.first()
 
 
 def init_db(app):
