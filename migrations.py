@@ -30,7 +30,7 @@ def get_sqlite_column_type(sqlalchemy_type):
 
 
 def migrate_database(app):
-    """Automatically add missing columns to existing tables."""
+    """Automatically add missing columns and indexes to existing tables."""
     from database import db, Folder, PDFFile, Task, Settings
 
     with app.app_context():
@@ -41,6 +41,14 @@ def migrate_database(app):
             return
 
         existing_tables = set(inspector.get_table_names())
+        existing_indexes = {}
+        for table_name in existing_tables:
+            try:
+                existing_indexes[table_name] = set(
+                    idx["name"] for idx in inspector.get_indexes(table_name)
+                )
+            except Exception:
+                existing_indexes[table_name] = set()
 
         models = [
             ("folder", Folder),
@@ -56,6 +64,7 @@ def migrate_database(app):
                     model_class.__table__.create(db.engine)
                 else:
                     _migrate_table_columns(table_name, model_class, inspector)
+                    _create_indexes(db, model_class, table_name, existing_indexes.get(table_name, set()))
             except Exception as e:
                 logger.warning(f"Migration failed for table '{table_name}': {e}")
 
@@ -111,3 +120,23 @@ def _get_existing_columns(inspector, table_name):
         return {col["name"] for col in columns}
     except Exception:
         return set()
+
+
+def _create_indexes(db, model_class, table_name, existing_indexes):
+    """Create missing indexes for a table."""
+    if not hasattr(model_class, '__table_args__'):
+        return
+    
+    table_args = model_class.__table_args__
+    if not table_args:
+        return
+    
+    for arg in table_args:
+        if isinstance(arg, db.Index):
+            index_name = arg.name
+            if index_name and index_name not in existing_indexes:
+                try:
+                    arg.create(db.engine)
+                    logger.info(f"Created index '{index_name}' on table '{table_name}'")
+                except Exception as e:
+                    logger.warning(f"Failed to create index '{index_name}': {e}")

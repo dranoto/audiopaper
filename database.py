@@ -221,12 +221,5 @@ def get_settings():
 def init_db(app):
     with app.app_context():
         db.init_app(app)
-        try:
-            db.create_all()
-        except Exception as e:
-            logger.warning(
-                f"db.create_all() encountered an issue (tables may already exist): {e}"
-            )
         from migrations import migrate_database
-
         migrate_database(app)
